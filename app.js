@@ -153,7 +153,7 @@ function calculate(){
     return;
   }
 
-  const totalMiles = 2 * inputs.cbMilesOneWay + 2 * inputs.conwyCbMilesOneWay;
+  const totalMiles = 2 * inputs.cbMilesOneWay;
   const mileageCost = totalMiles * inputs.rate;
   const band = bandFor(inputs.cbMilesOneWay);
   const minFee = minFeeFor(inputs.cbMilesOneWay);
