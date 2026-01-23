@@ -61,8 +61,13 @@ document.getElementById("calcBtn").onclick = () => {
   minFeeEl.textContent = "£" + minFee;
   totalMilesEl.textContent = totalMiles;
   mileageCostEl.textContent = "£" + mileageCost.toFixed(2);
-  youGetEl.textContent = "£" + (split + mileageCost).toFixed(2);
-  heGetsEl.textContent = "£" + split.toFixed(2);
+  const rawYou = split + mileageCost;
+const roundedYou = Math.round(rawYou / 10) * 10;
+const roundedHe = Math.round((fee - roundedYou) / 10) * 10;
+
+youGetEl.textContent = "£" + roundedYou;
+heGetsEl.textContent = "£" + roundedHe;
+
 
   warning.classList.toggle("hidden", fee >= minFee);
   warning.textContent = fee < minFee ? `Below minimum for ${band} (£${minFee})` : "";
