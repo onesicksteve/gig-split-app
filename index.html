@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Gig Split Calculator</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header class="wrap">
+  <h1>Gig Split Calculator</h1>
+  <p class="sub">Conwy-based mileage • 45p/mile • saves history</p>
+</header>
+
+<main class="wrap grid">
+
+<section class="card">
+  <h2>New gig</h2>
+
+  <label>Date
+    <input id="date" type="date">
+  </label>
+
+  <label>Venue / Town
+    <input id="town" list="townList" placeholder="Start typing…" />
+    <datalist id="townList"></datalist>
+  </label>
+
+  <label>Agreed fee (£)
+    <input id="fee" type="number" step="1">
+  </label>
+
+  <label>Conwy → Venue (one way miles)
+    <input id="miles" type="number" step="0.1">
+  </label>
+
+  <div class="row">
+    <button id="calcBtn">Calculate</button>
+    <button id="saveTownBtn">Save town + miles</button>
+    <button id="saveGigBtn" disabled>Save gig</button>
+  </div>
+
+  <div id="warning" class="warning hidden"></div>
+
+  <h3>Results</h3>
+  <div class="results">
+    <div><b>Distance band:</b> <span id="band">—</span></div>
+    <div><b>Minimum fee:</b> <span id="minFee">—</span></div>
+    <div><b>Total miles:</b> <span id="totalMiles">—</span></div>
+    <div><b>Mileage cost:</b> <span id="mileageCost">—</span></div>
+    <div><b>You get:</b> <span id="youGet">—</span></div>
+    <div><b>He gets:</b> <span id="heGets">—</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Gig history</h2>
+  <div id="history"></div>
+</section>
+
+</main>
+
+<script src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+
+</body>
+</html>
