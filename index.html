@@ -14,7 +14,7 @@
   <div class="header-row">
     <div>
       <h1>Gig Split Calculator</h1>
-      <p class="sub">Includes Conwy ↔ Colwyn Bay travel • 45p/mile • cash rounded • saves history</p>
+      <p class="sub">Mileage from Colwyn Bay only • 45p/mile • cash rounded • saves history</p>
     </div>
     <button id="installBtn" class="btn" style="display:none;">Install App</button>
   </div>
@@ -27,109 +27,68 @@
 
 <main class="wrap grid">
 
-  <section class="card">
-    <h2>New gig</h2>
+<section class="card">
+<h2>New gig</h2>
 
-    <label>
-      Date (optional)
-      <input id="date" type="date">
-    </label>
+<label>Date (optional)
+<input id="date" type="date">
+</label>
 
-    <label>
-      Venue / Town
-      <input id="town" list="townList" placeholder="Start typing…">
-      <datalist id="townList"></datalist>
-    </label>
+<label>Venue / Town
+<input id="town" list="townList">
+<datalist id="townList"></datalist>
+</label>
 
-    <label>
-      Agreed fee (£)
-      <input id="fee" type="number" step="1" placeholder="e.g. 350">
-    </label>
+<label>Agreed fee (£)
+<input id="fee" type="number">
+</label>
 
-    <label>
-      Colwyn Bay → Venue (one way miles)
-      <input id="miles" type="number" step="0.1" placeholder="e.g. 60">
-    </label>
+<label>Colwyn Bay → Venue (one way miles)
+<input id="miles" type="number" step="0.1">
+</label>
 
-    <div class="row">
-      <button id="calcBtn" class="btn btn-primary">Calculate</button>
-      <button id="saveTownBtn" class="btn">Save town + miles</button>
-      <button id="saveGigBtn" class="btn" disabled>Save gig</button>
-      <button id="shareBtn" class="btn" disabled>Share summary</button>
-    </div>
+<div class="row">
+<button id="calcBtn" class="btn btn-primary">Calculate</button>
+<button id="saveTownBtn" class="btn">Save town + miles</button>
+<button id="saveGigBtn" class="btn" disabled>Save gig</button>
+<button id="shareBtn" class="btn" disabled>Share summary</button>
+</div>
 
-    <!-- Hidden fixed leg: Conwy -> Colwyn Bay (one way). Change if needed -->
-    <input id="conwyCb" type="hidden" value="12">
+<div id="warning" class="warning hidden"></div>
 
-    <details class="advanced">
-      <summary>Advanced (optional)</summary>
+<h3>Results</h3>
+<div class="results">
+<div><b>Band:</b> <span id="band">—</span></div>
+<div><b>Minimum:</b> <span id="minFee">—</span></div>
+<div><b>Total miles:</b> <span id="totalMiles">—</span></div>
+<div><b>Mileage cost:</b> <span id="mileageCost">—</span></div>
 
-      <div class="advanced-grid">
-        <label>
-          Avg speed (mph)
-          <input id="avgSpeed" type="number" step="1" value="40">
-        </label>
+<div class="divider"></div>
 
-        <label>
-          Setup + packdown (hours)
-          <input id="setupHours" type="number" step="0.25" value="1">
-        </label>
+<div><b>You get:</b> <span id="youGet">—</span></div>
+<div><b>Steve gets:</b> <span id="heGets">—</span></div>
 
-        <label>
-          Playing time (hours)
-          <input id="playHours" type="number" step="0.25" value="2">
-        </label>
+<div class="divider"></div>
 
-        <label>
-          Mileage rate (£/mile)
-          <input id="rate" type="number" step="0.01" value="0.45">
-        </label>
-      </div>
-    </details>
+<div><b>Worth it?</b> <span id="worthIt">—</span></div>
+<div><b>Hourly rate:</b> <span id="hourlyRate">—</span></div>
+</div>
+</section>
 
-    <div id="warning" class="warning hidden"></div>
+<section class="card">
+<h2>This month</h2>
+<div class="results">
+<div><b>Gigs:</b> <span id="mGigs">0</span></div>
+<div><b>Miles:</b> <span id="mMiles">0</span></div>
+<div><b>You earned:</b> <span id="mYou">£0</span></div>
+</div>
 
-    <h3>Results</h3>
-    <div class="results">
-      <div><b>Distance band:</b> <span id="band">—</span></div>
-      <div><b>Minimum fee:</b> <span id="minFee">—</span></div>
-      <div><b>Total miles:</b> <span id="totalMiles">—</span></div>
-      <div><b>Mileage cost:</b> <span id="mileageCost">—</span></div>
-
-      <div class="divider"></div>
-
-      <div><b>You get:</b> <span id="youGet">—</span></div>
-      <div><b>He gets:</b> <span id="heGets">—</span></div>
-
-      <div class="divider"></div>
-
-      <div><b>Worth it?</b> <span id="worthIt">—</span></div>
-      <div><b>Est. hourly (you):</b> <span id="hourlyRate">—</span></div>
-      <div><b>Total time (est.):</b> <span id="totalTime">—</span></div>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>This month</h2>
-    <div class="results">
-      <div><b>Gigs:</b> <span id="mGigs">0</span></div>
-      <div><b>Total miles:</b> <span id="mMiles">0</span></div>
-      <div><b>Mileage cost:</b> <span id="mMileage">£0</span></div>
-      <div><b>You total:</b> <span id="mYou">£0</span></div>
-    </div>
-
-    <h2 style="margin-top:16px;">Gig history</h2>
-    <div id="history"></div>
-  </section>
+<h2 style="margin-top:16px;">Gig history</h2>
+<div id="history"></div>
+</section>
 
 </main>
 
 <script src="app.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
-}
-</script>
-
 </body>
 </html>
