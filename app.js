@@ -372,7 +372,7 @@ function calcAndRender() {
   }
 
   // Route: Conwy → CB → Venue → CB → Conwy
-  const totalMiles = (milesCbToVenue * 2) + (conwyCb * 2);
+  const totalMiles = milesCbToVenue * 2;
   const mileageCost = totalMiles * rate;
 
   const [band, minFee] = bandFor(milesCbToVenue);
