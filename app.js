@@ -1,3 +1,4 @@
+alert("JS LOADED");
 const RATE = 0.45;
 const TOWNS_KEY = "townMiles";
 const HISTORY_KEY = "gigHistory";
