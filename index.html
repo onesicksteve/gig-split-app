@@ -11,67 +11,44 @@
 <body>
 
 <header class="wrap">
-  <h1>Gig Split Calculator</h1>
-  <p class="sub">Conwy-based mileage • 45p/mile • saves history</p>
+  <div class="header-row">
+    <div>
+      <h1>Gig Split Calculator</h1>
+      <p class="sub">Includes Conwy ↔ Colwyn Bay travel • 45p/mile • cash rounded • saves history</p>
+    </div>
+    <button id="installBtn" class="btn" style="display:none;">Install App</button>
+  </div>
+
+  <div class="toolbar">
+    <button id="exportCsvBtn" class="btn">Export CSV</button>
+    <button id="clearHistoryBtn" class="btn btn-danger">Clear history</button>
+  </div>
 </header>
 
 <main class="wrap grid">
 
-<section class="card">
-  <h2>New gig</h2>
+  <section class="card">
+    <h2>New gig</h2>
 
-  <label>Date
-    <input id="date" type="date">
-  </label>
+    <label>
+      Date (optional)
+      <input id="date" type="date">
+    </label>
 
-  <label>Venue / Town
-    <input id="town" list="townList" placeholder="Start typing…" />
-    <datalist id="townList"></datalist>
-  </label>
+    <label>
+      Venue / Town
+      <input id="town" list="townList" placeholder="Start typing…">
+      <datalist id="townList"></datalist>
+    </label>
 
-  <label>Agreed fee (£)
-    <input id="fee" type="number" step="1">
-  </label>
+    <label>
+      Agreed fee (£)
+      <input id="fee" type="number" step="1" placeholder="e.g. 350">
+    </label>
 
- <label>
-  Colwyn Bay → Venue (one way miles)
-  <input id="miles" type="number" step="0.1">
-</label>
+    <label>
+      Colwyn Bay → Venue (one way miles)
+      <input id="miles" type="number" step="0.1" placeholder="e.g. 60">
+    </label>
 
-<input id="conwyCb" type="hidden" value="12">
-
-  <div class="row">
-    <button id="calcBtn">Calculate</button>
-    <button id="saveTownBtn">Save town + miles</button>
-    <button id="saveGigBtn" disabled>Save gig</button>
-  </div>
-
-  <div id="warning" class="warning hidden"></div>
-
-  <h3>Results</h3>
-  <div class="results">
-    <div><b>Distance band:</b> <span id="band">—</span></div>
-    <div><b>Minimum fee:</b> <span id="minFee">—</span></div>
-    <div><b>Total miles:</b> <span id="totalMiles">—</span></div>
-    <div><b>Mileage cost:</b> <span id="mileageCost">—</span></div>
-    <div><b>You get:</b> <span id="youGet">—</span></div>
-    <div><b>He gets:</b> <span id="heGets">—</span></div>
-  </div>
-</section>
-
-<section class="card">
-  <h2>Gig history</h2>
-  <div id="history"></div>
-</section>
-
-</main>
-
-<script src="app.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
-}
-</script>
-
-</body>
-</html>
+    <!-- Hidden fixed leg: Conwy -> Colwyn Bay (one way). Change
