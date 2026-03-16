@@ -202,7 +202,7 @@ function renderCalendar() {
   html += `</div>
     <div class="avail-legend">
       <div class="legend-item"><div class="legend-dot legend-me"></div> You unavailable</div>
-      <div class="legend-item"><div class="legend-dot legend-steve"></div> Other Steve unavailable</div>
+      <div class="legend-item"><div class="legend-dot legend-steve"></div> Steve White unavailable</div>
       <div class="legend-item"><div class="legend-dot legend-gig"></div> Gig booked</div>
     </div>`;
 
