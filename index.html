@@ -3,92 +3,167 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0f172a" />
-  <title>Gig Split Calculator</title>
-  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>GigSplit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
 <header class="wrap">
   <div class="header-row">
-    <div>
-      <h1>Gig Split Calculator</h1>
-      <p class="sub">Mileage from Colwyn Bay only • 45p/mile • cash rounded • saves history</p>
+    <div class="brand">
+      <span class="brand-icon">♪</span>
+      <div>
+        <h1>GigSplit</h1>
+        <p class="sub">Your view • live sync</p>
+      </div>
     </div>
-    <button id="installBtn" class="btn" style="display:none;">Install App</button>
+    <div class="header-actions">
+      <span id="syncIndicator" class="sync-dot sync-off" title="Sync status"></span>
+      <button id="settingsBtn" class="icon-btn" title="Settings">⚙</button>
+    </div>
   </div>
-
   <div class="toolbar">
-    <button id="exportCsvBtn" class="btn">Export CSV</button>
-    <button id="clearHistoryBtn" class="btn btn-danger">Clear history</button>
+    <button id="exportCsvBtn" class="btn btn-ghost">↓ CSV</button>
+    <button id="clearHistoryBtn" class="btn btn-danger">✕ Clear history</button>
   </div>
 </header>
 
-<main class="wrap grid">
-
-<section class="card">
-<h2>New gig</h2>
-
-<label>Date (optional)
-<input id="date" type="date">
-</label>
-
-<label>Venue / Town
-<input id="town" list="townList">
-<datalist id="townList"></datalist>
-</label>
-
-<label>Agreed fee (£)
-<input id="fee" type="number">
-</label>
-
-<label>Colwyn Bay → Venue (one way miles)
-<input id="miles" type="number" step="0.1">
-</label>
-
-<div class="row">
-<button id="calcBtn" class="btn btn-primary">Calculate</button>
-<button id="saveTownBtn" class="btn">Save town + miles</button>
-<button id="saveGigBtn" class="btn" disabled>Save gig</button>
-<button id="shareBtn" class="btn" disabled>Share summary</button>
+<!-- SETTINGS -->
+<div id="settingsPanel" class="overlay hidden">
+  <div class="overlay-box">
+    <div class="overlay-header">
+      <h2>Settings</h2>
+      <button id="closeSettingsBtn" class="icon-btn">✕</button>
+    </div>
+    <div class="settings-groups">
+      <div class="setting-group">
+        <h3>⛽ Fuel</h3>
+        <label>Your car's MPG
+          <input id="settingMpg" type="number" placeholder="e.g. 40" step="0.1">
+        </label>
+        <label>Fuel price (pence per litre)
+          <input id="settingFuelPrice" type="number" placeholder="e.g. 145" step="0.1">
+        </label>
+      </div>
+      <div class="setting-group">
+        <h3>📱 Other Steve</h3>
+        <label>WhatsApp number (country code, no +)
+          <input id="settingWhatsapp" type="text" placeholder="e.g. 447700900123">
+        </label>
+      </div>
+      <div class="setting-group">
+        <h3>⏱ Time defaults</h3>
+        <label>Avg driving speed (mph)
+          <input id="settingAvgSpeed" type="number" placeholder="40">
+        </label>
+        <label>Setup time (hrs)
+          <input id="settingSetupHours" type="number" placeholder="1" step="0.5">
+        </label>
+        <label>Play time (hrs)
+          <input id="settingPlayHours" type="number" placeholder="2" step="0.5">
+        </label>
+      </div>
+    </div>
+    <button id="saveSettingsBtn" class="btn btn-primary full-width">Save settings</button>
+  </div>
 </div>
 
-<div id="warning" class="warning hidden"></div>
+<main class="wrap main-grid">
 
-<h3>Results</h3>
-<div class="results">
-<div><b>Band:</b> <span id="band">—</span></div>
-<div><b>Minimum:</b> <span id="minFee">—</span></div>
-<div><b>Total miles:</b> <span id="totalMiles">—</span></div>
-<div><b>Mileage cost:</b> <span id="mileageCost">—</span></div>
+  <!-- LEFT: FORM + AVAILABILITY -->
+  <div class="left-col">
 
-<div class="divider"></div>
+    <section class="card">
+      <h2 class="card-heading">New gig</h2>
+      <label>Date
+        <input id="date" type="date">
+      </label>
+      <label>Venue / Town
+        <input id="town" list="townList" placeholder="e.g. Llandudno">
+        <datalist id="townList"></datalist>
+      </label>
+      <label>Agreed fee (£)
+        <input id="fee" type="number" placeholder="200">
+        <span id="feeHint" class="field-hint hidden"></span>
+      </label>
+      <label>Colwyn Bay → Venue (one-way miles)
+        <input id="miles" type="number" step="0.1" placeholder="15">
+      </label>
+      <label>Venue notes <span class="optional">(saved with town)</span>
+        <input id="notes" type="text" placeholder="e.g. back entrance, ask for Dave">
+      </label>
 
-<div><b>You get:</b> <span id="youGet">—</span></div>
-<div><b>Steve gets:</b> <span id="heGets">—</span></div>
+      <div class="btn-row">
+        <button id="calcBtn" class="btn btn-primary">Calculate</button>
+        <button id="saveTownBtn" class="btn btn-ghost">Save town</button>
+      </div>
 
-<div class="divider"></div>
+      <div id="warning" class="warning hidden"></div>
 
-<div><b>Worth it?</b> <span id="worthIt">—</span></div>
-<div><b>Hourly rate:</b> <span id="hourlyRate">—</span></div>
-</div>
-</section>
+      <div id="resultsBlock" class="results-block hidden">
+        <div class="split-box">
+          <div class="split-col">
+            <div class="split-name">You</div>
+            <div class="split-amount" id="youGet">—</div>
+            <div class="split-net" id="youNet"></div>
+          </div>
+          <div class="split-divider">÷ 2</div>
+          <div class="split-col">
+            <div class="split-name">Steve</div>
+            <div class="split-amount" id="heGets">—</div>
+          </div>
+        </div>
 
-<section class="card">
-<h2>This month</h2>
-<div class="results">
-<div><b>Gigs:</b> <span id="mGigs">0</span></div>
-<div><b>Miles:</b> <span id="mMiles">0</span></div>
-<div><b>You earned:</b> <span id="mYou">£0</span></div>
-</div>
+        <div class="results-grid">
+          <div class="result-row"><span>Total miles (return)</span><strong id="totalMiles">—</strong></div>
+          <div class="result-row" id="fuelCostRow"><span>Fuel cost</span><strong id="fuelCost" class="text-amber">—</strong></div>
+          <div class="result-row"><span>Worth it?</span><strong id="worthIt">—</strong></div>
+          <div class="result-row"><span>Your hourly rate</span><strong id="hourlyRate">—</strong></div>
+        </div>
 
-<h2 style="margin-top:16px;">Gig history</h2>
-<div id="history"></div>
-</section>
+        <div class="action-row">
+          <button id="saveGigBtn" class="btn btn-primary" disabled>Save &amp; sync</button>
+          <button id="whatsappBtn" class="btn btn-whatsapp" disabled>WhatsApp Steve</button>
+          <button id="icsBtn" class="btn btn-ghost" disabled>↓ Calendar</button>
+          <button id="shareBtn" class="btn btn-ghost" disabled>Share</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- AVAILABILITY -->
+    <section class="card">
+      <h2 class="card-heading">Availability</h2>
+      <p class="hint">Block out dates you can't do. Steve sees this live.</p>
+      <div id="availCalendar" class="avail-calendar"></div>
+      <div id="steveUnavail" class="unavail-list"></div>
+    </section>
+
+  </div>
+
+  <!-- RIGHT: STATS + HISTORY -->
+  <section class="card">
+    <div class="stats-tabs">
+      <button class="tab-btn active" data-tab="month">This month</button>
+      <button class="tab-btn" data-tab="year">This year</button>
+      <button class="tab-btn" data-tab="all">All time</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-item"><span class="stat-label">Gigs</span><span class="stat-value" id="statGigs">0</span></div>
+      <div class="stat-item"><span class="stat-label">Miles</span><span class="stat-value" id="statMiles">0</span></div>
+      <div class="stat-item"><span class="stat-label">You earned</span><span class="stat-value" id="statYou">£0</span></div>
+      <div class="stat-item"><span class="stat-label">Fuel spent</span><span class="stat-value" id="statFuel">—</span></div>
+    </div>
+
+    <h2 class="card-heading" style="margin-top:20px;">Gig history</h2>
+    <div id="history"></div>
+  </section>
 
 </main>
 
-<script src="app.js"></script>
+<!-- Firebase -->
+<script type="module" src="app.js"></script>
 </body>
 </html>
