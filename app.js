@@ -1,527 +1,502 @@
-/* =========================
-   Gig Split Calculator (CB mileage only)
-   - Mileage ONLY: Colwyn Bay -> Venue -> Colwyn Bay
-   - Town auto-fill + save
-   - Driver-first cash rounding (£10 notes) with exact total
-   - Worth-it + hourly estimate
-   - History (delete works even for older entries without id)
-   - Monthly totals
-   - Share summary
-   - CSV export
-   - Clear history
-   - Install button support (PWA)
-   ========================= */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, push, onValue, remove, update }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-const TOWNS_KEY = "townMiles_v1";
-const HISTORY_KEY = "gigHistory_v4";
+/* ===== FIREBASE ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyAvz5vVadBCJ4k-BbPmUup4wxRT-E1ydsk",
+  authDomain: "twosicksteves-7489a.firebaseapp.com",
+  databaseURL: "https://twosicksteves-7489a-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "twosicksteves-7489a",
+  storageBucket: "twosicksteves-7489a.firebasestorage.app",
+  messagingSenderId: "657952916089",
+  appId: "1:657952916089:web:968ac06abcc63b2654caa8"
+};
 
-let deferredPrompt = null;
-let lastGig = null;
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getDatabase(firebaseApp);
 
-/* ---------- elements ---------- */
-const townInput = document.getElementById("town");
-const milesInput = document.getElementById("miles"); // CB -> Venue (one way)
-const feeInput = document.getElementById("fee");
-const dateInput = document.getElementById("date");
-
-const avgSpeedInput = document.getElementById("avgSpeed");
-const setupHoursInput = document.getElementById("setupHours");
-const playHoursInput = document.getElementById("playHours");
-const rateInput = document.getElementById("rate");
-
-const warningEl = document.getElementById("warning");
-
-const bandEl = document.getElementById("band");
-const minFeeEl = document.getElementById("minFee");
-const totalMilesEl = document.getElementById("totalMiles");
-const mileageCostEl = document.getElementById("mileageCost");
-const youGetEl = document.getElementById("youGet");
-const heGetsEl = document.getElementById("heGets");
-const worthItEl = document.getElementById("worthIt");
-const hourlyRateEl = document.getElementById("hourlyRate");
-const totalTimeEl = document.getElementById("totalTime");
-
-const mGigsEl = document.getElementById("mGigs");
-const mMilesEl = document.getElementById("mMiles");
-const mMileageEl = document.getElementById("mMileage");
-const mYouEl = document.getElementById("mYou");
-
-const historyEl = document.getElementById("history");
-
-const calcBtn = document.getElementById("calcBtn");
-const saveTownBtn = document.getElementById("saveTownBtn");
-const saveGigBtn = document.getElementById("saveGigBtn");
-const shareBtn = document.getElementById("shareBtn");
-const exportCsvBtn = document.getElementById("exportCsvBtn");
-const clearHistoryBtn = document.getElementById("clearHistoryBtn");
-const installBtn = document.getElementById("installBtn");
-
-/* ---------- helpers ---------- */
-function safeNumber(v, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
+/* ===== SYNC INDICATOR ===== */
+function setSyncStatus(status) {
+  const dot = document.getElementById("syncIndicator");
+  if (!dot) return;
+  dot.className = "sync-dot";
+  if (status === "on")  dot.classList.add("sync-on");
+  if (status === "off") dot.classList.add("sync-off");
+  if (status === "err") dot.classList.add("sync-err");
 }
 
-function roundTo10(n) {
-  return Math.round(n / 10) * 10;
-}
+/* ===== LOCAL SETTINGS ===== */
+const SETTINGS_KEY = "gigSplitSettings_v1";
+const TOWNS_KEY    = "townMiles_v2";
+function loadSettings() { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch { return {}; } }
+function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+function loadTowns() { try { return JSON.parse(localStorage.getItem(TOWNS_KEY)) || {}; } catch { return {}; } }
+function saveTowns(t) { localStorage.setItem(TOWNS_KEY, JSON.stringify(t)); }
 
-function money(n) {
-  if (!Number.isFinite(n)) return "—";
-  return "£" + n.toFixed(2);
-}
-
-function makeId() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
+/* ===== HELPERS ===== */
+function safeNum(v, fb = 0) { const n = Number(v); return Number.isFinite(n) ? n : fb; }
+function roundTo10(n) { return Math.round(n / 10) * 10; }
+function money(n) { return Number.isFinite(n) ? "£" + n.toFixed(2) : "—"; }
+function makeId() { return `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function todayYMD() {
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
-
 function parseYMD(s) {
   if (!s) return null;
-  const parts = s.split("-").map(Number);
-  if (parts.length !== 3) return null;
-  const [y, m, d] = parts;
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d, 12, 0, 0); // noon avoids timezone issues
+  const [y,m,d] = s.split("-").map(Number);
+  if (!y||!m||!d) return null;
+  return new Date(y, m-1, d, 12, 0, 0);
 }
-
-/* ---------- rules (based on CB -> Venue miles one way) ---------- */
-function bandFor(milesCbToVenue) {
-  if (milesCbToVenue <= 20) return ["Local", 250];
-  if (milesCbToVenue <= 50) return ["Travel", 300];
+function formatDateNice(ymd) {
+  if (!ymd) return "";
+  const d = parseYMD(ymd);
+  return d ? d.toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" }) : ymd;
+}
+function bandFor(miles) {
+  if (miles <= 20) return ["Local", 250];
+  if (miles <= 50) return ["Travel", 300];
   return ["Destination", 350];
 }
+function calcFuelCost(totalMiles, mpg, ppl) {
+  if (!mpg || !ppl || mpg <= 0 || ppl <= 0) return null;
+  return (totalMiles / mpg) * 4.54609 * (ppl / 100);
+}
+function worthItLabel(h) {
+  if (h >= 25) return "✅ Worth it";
+  if (h >= 18) return "⚠️ Marginal";
+  return "❌ Not worth it";
+}
 
-/* ---------- towns ---------- */
-function loadTowns() {
-  try { return JSON.parse(localStorage.getItem(TOWNS_KEY)) || {}; }
-  catch { return {}; }
+/* ===== TOAST ===== */
+let toastTimer = null;
+function showToast(msg) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2500);
 }
-function saveTowns(towns) {
-  localStorage.setItem(TOWNS_KEY, JSON.stringify(towns));
-}
+
+/* ===== TOWN LIST ===== */
 function renderTownList() {
   const dl = document.getElementById("townList");
   if (!dl) return;
   dl.innerHTML = "";
-  const towns = loadTowns();
-  Object.keys(towns).sort().forEach(name => {
-    const opt = document.createElement("option");
-    opt.value = name;
-    dl.appendChild(opt);
+  Object.keys(loadTowns()).sort().forEach(name => {
+    const o = document.createElement("option"); o.value = name; dl.appendChild(o);
   });
 }
-if (townInput) {
-  townInput.addEventListener("change", () => {
-    const towns = loadTowns();
-    const key = (townInput.value || "").trim();
-    if (towns[key] !== undefined) {
-      milesInput.value = towns[key];
+
+document.getElementById("town").addEventListener("change", () => {
+  const rec = loadTowns()[document.getElementById("town").value.trim()];
+  if (!rec) return;
+  if (typeof rec === "number") { document.getElementById("miles").value = rec; }
+  else {
+    if (rec.miles) document.getElementById("miles").value = rec.miles;
+    if (rec.notes) document.getElementById("notes").value = rec.notes;
+  }
+  updateFeeHint();
+});
+
+/* ===== FEE HINT ===== */
+function updateFeeHint() {
+  const fee = safeNum(document.getElementById("fee").value, 0);
+  const miles = safeNum(document.getElementById("miles").value, 0);
+  const feeEl = document.getElementById("fee");
+  const hintEl = document.getElementById("feeHint");
+  if (miles > 0 && fee > 0) {
+    const [band, min] = bandFor(miles);
+    if (fee < min) {
+      feeEl.classList.add("input-warn");
+      hintEl.textContent = `Below ${band} minimum (£${min})`;
+      hintEl.classList.remove("hidden");
+      return;
     }
+  }
+  feeEl.classList.remove("input-warn");
+  hintEl.classList.add("hidden");
+}
+document.getElementById("fee").addEventListener("input", updateFeeHint);
+document.getElementById("miles").addEventListener("input", updateFeeHint);
+
+/* ===== FIREBASE DATA ===== */
+let gigsData = {};
+let myUnavail = {};
+let steveUnavail = {};
+
+// Listen to gigs
+onValue(ref(db, "gigs"), snap => {
+  gigsData = snap.val() || {};
+  setSyncStatus("on");
+  renderHistory();
+  renderStats();
+  renderCalendar();
+}, err => { setSyncStatus("err"); console.error(err); });
+
+// Listen to my unavailability
+onValue(ref(db, "unavail/steve1"), snap => {
+  myUnavail = snap.val() || {};
+  renderCalendar();
+});
+
+// Listen to Steve's unavailability
+onValue(ref(db, "unavail/steve2"), snap => {
+  steveUnavail = snap.val() || {};
+  renderCalendar();
+  renderSteveUnavailList();
+});
+
+/* ===== AVAILABILITY CALENDAR ===== */
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+
+function renderCalendar() {
+  const container = document.getElementById("availCalendar");
+  if (!container) return;
+
+  const todayStr = todayYMD();
+  const gigDates = new Set(Object.values(gigsData).map(g => g.date).filter(Boolean));
+
+  // Header
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const startOffset = (firstDay === 0 ? 6 : firstDay - 1); // Mon-first
+
+  let html = `
+    <div class="avail-month-header">
+      <button class="avail-nav" id="calPrev">‹</button>
+      <span class="avail-month-label">${monthNames[calMonth]} ${calYear}</span>
+      <button class="avail-nav" id="calNext">›</button>
+    </div>
+    <div class="avail-grid">
+      ${["M","T","W","T","F","S","S"].map(d => `<div class="avail-day-name">${d}</div>`).join("")}
+  `;
+
+  for (let i = 0; i < startOffset; i++) html += `<div class="avail-day empty"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ymd = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const isPast  = ymd < todayStr;
+    const isToday = ymd === todayStr;
+    const meOff   = !!myUnavail[ymd];
+    const steveOff= !!steveUnavail[ymd];
+    const hasGig  = gigDates.has(ymd);
+
+    let cls = "avail-day";
+    if (isPast)           cls += " past";
+    else if (isToday)     cls += " today";
+    if (meOff && steveOff) cls += " both-off";
+    else if (meOff)       cls += " me-off";
+    else if (steveOff)    cls += " steve-off";
+    if (hasGig)           cls += " has-gig";
+
+    html += `<div class="${cls}" data-date="${ymd}">${d}</div>`;
+  }
+
+  html += `</div>
+    <div class="avail-legend">
+      <div class="legend-item"><div class="legend-dot legend-me"></div> You unavailable</div>
+      <div class="legend-item"><div class="legend-dot legend-steve"></div> Steve unavailable</div>
+      <div class="legend-item"><div class="legend-dot legend-gig"></div> Gig booked</div>
+    </div>`;
+
+  container.innerHTML = html;
+
+  document.getElementById("calPrev").onclick = () => {
+    calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  };
+  document.getElementById("calNext").onclick = () => {
+    calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+    renderCalendar();
+  };
+
+  container.querySelectorAll(".avail-day[data-date]").forEach(el => {
+    if (el.classList.contains("past")) return;
+    el.addEventListener("click", () => toggleMyUnavail(el.dataset.date));
   });
 }
 
-/* ---------- history ---------- */
-function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
-  catch { return []; }
-}
-function saveHistory(hist) {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+async function toggleMyUnavail(ymd) {
+  const r = ref(db, `unavail/steve1/${ymd}`);
+  if (myUnavail[ymd]) {
+    await remove(r);
+    showToast("Available again: " + formatDateNice(ymd));
+  } else {
+    await set(r, true);
+    showToast("Blocked: " + formatDateNice(ymd));
+  }
 }
 
-function getGigDateForGrouping(g) {
-  const dt = parseYMD(g.date);
-  if (dt) return dt;
-  return new Date(g.createdAt || Date.now());
+function renderSteveUnavailList() {
+  const el = document.getElementById("steveUnavail");
+  if (!el) return;
+  const dates = Object.keys(steveUnavail).filter(d => d >= todayYMD()).sort();
+  if (!dates.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="unavail-title">Steve unavailable</div>` +
+    dates.map(d => `<div class="unavail-item">⚠ ${formatDateNice(d)}</div>`).join("");
 }
-function isSameMonth(a, b) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
-}
-function updateMonthlyTotals() {
-  if (!mGigsEl) return;
 
-  const hist = loadHistory();
+/* ===== STATS ===== */
+let activeTab = "month";
+
+function computeStats(filter) {
   const now = new Date();
-
-  let gigs = 0;
-  let miles = 0;
-  let mileageCost = 0;
-  let youTotal = 0;
-
-  hist.forEach(g => {
-    const dt = getGigDateForGrouping(g);
-    if (!isSameMonth(dt, now)) return;
-
-    gigs += 1;
-    miles += safeNumber(g.totalMiles, 0);
-    mileageCost += safeNumber(g.mileageCost, 0);
-    youTotal += safeNumber(g.you, 0);
+  let gigs = 0, miles = 0, you = 0, fuel = 0, hasFuel = false;
+  Object.values(gigsData).forEach(g => {
+    const d = parseYMD(g.date) || new Date(g.createdAt || 0);
+    if (filter === "month" && (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth())) return;
+    if (filter === "year"  && d.getFullYear() !== now.getFullYear()) return;
+    gigs++;
+    miles += safeNum(g.totalMiles);
+    you   += safeNum(g.you);
+    if (g.fuelCost != null) { fuel += safeNum(g.fuelCost); hasFuel = true; }
   });
-
-  mGigsEl.textContent = String(gigs);
-  mMilesEl.textContent = String(Math.round(miles));
-  if (mMileageEl) mMileageEl.textContent = "£" + mileageCost.toFixed(2);
-  mYouEl.textContent = "£" + Math.round(youTotal);
+  return { gigs, miles: Math.round(miles), you: Math.round(you), fuel: hasFuel ? fuel : null };
 }
 
+function renderStats() {
+  const s = computeStats(activeTab);
+  document.getElementById("statGigs").textContent  = s.gigs;
+  document.getElementById("statMiles").textContent = s.miles;
+  document.getElementById("statYou").textContent   = "£" + s.you;
+  document.getElementById("statFuel").textContent  = s.fuel != null ? "£" + s.fuel.toFixed(2) : "—";
+}
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeTab = btn.dataset.tab;
+    renderStats();
+  });
+});
+
+/* ===== HISTORY ===== */
 function gigSummaryText(g) {
-  const town = (g.town || "").trim() || "(no town)";
-  const date = (g.date || "").trim();
-  const header = `${date ? date + " " : ""}${town}`;
+  const town = (g.town||"").trim() || "(no town)";
+  const date = g.date ? formatDateNice(g.date) : "";
+  const fuel = g.fuelCost != null ? `Fuel: £${g.fuelCost.toFixed(2)}\n` : "";
+  return `🎸 ${date ? date+" — " : ""}${town}\nFee: £${Math.round(g.fee||0)}\nMiles: ${g.totalMiles!=null?g.totalMiles.toFixed(1):"—"} (return)\n${fuel}\n💰 You: £${Math.round(g.you||0)}\n💰 Steve: £${Math.round(g.he||0)}`.trim();
+}
 
-  return `${header}
-Fee: £${Math.round(g.fee || 0)}
-Band: ${g.band || "—"} (min £${Math.round(g.minFee || 0)})
-Total miles: ${Number.isFinite(g.totalMiles) ? g.totalMiles.toFixed(1) : "—"}
-Mileage: £${Number.isFinite(g.mileageCost) ? g.mileageCost.toFixed(2) : "—"}
+function openWhatsapp(g) {
+  const settings = loadSettings();
+  const text = encodeURIComponent(gigSummaryText(g));
+  const num  = (settings.whatsapp || "").trim();
+  window.open(num ? `https://wa.me/${num}?text=${text}` : `https://wa.me/?text=${text}`, "_blank");
+}
 
-You: £${Math.round(g.you || 0)}
-Steve: £${Math.round(g.he || 0)}`;
+function downloadIcs(g) {
+  const town = (g.town||"TBC").trim();
+  const date = g.date || todayYMD();
+  const [y,m,d] = date.split("-");
+  const dt = `${y}${m}${d}`;
+  const ics = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//GigSplit//EN","BEGIN:VEVENT",
+    `UID:${g.id||makeId()}@gigsplit`,`DTSTAMP:${dt}T120000Z`,
+    `DTSTART;VALUE=DATE:${dt}`,`DTEND;VALUE=DATE:${dt}`,
+    `SUMMARY:🎸 Gig – ${town}`,
+    `DESCRIPTION:Fee: £${Math.round(g.fee||0)}\\nYou: £${Math.round(g.you||0)}\\nSteve: £${Math.round(g.he||0)}`,
+    `LOCATION:${town}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" }));
+  a.download = `gig-${town.replace(/\s+/g,"-").toLowerCase()}-${date}.ics`;
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 async function shareText(text) {
-  try {
-    if (navigator.share) {
-      await navigator.share({ text });
-      return;
-    }
-  } catch {}
-  try {
-    await navigator.clipboard.writeText(text);
-    alert("Copied to clipboard. Paste into WhatsApp.");
-  } catch {
-    alert("Could not share/copy. Try from a normal Chrome tab.");
-  }
+  try { if (navigator.share) { await navigator.share({ text }); return; } } catch {}
+  try { await navigator.clipboard.writeText(text); showToast("Copied to clipboard"); }
+  catch { alert("Could not share."); }
 }
 
 function renderHistory() {
-  if (!historyEl) return;
+  const histEl = document.getElementById("history");
+  if (!histEl) return;
+  const gigs = Object.entries(gigsData).sort((a,b) => (b[1].createdAt||0)-(a[1].createdAt||0));
 
-  const hist = loadHistory();
-  historyEl.innerHTML = "";
+  if (!gigs.length) { histEl.innerHTML = '<div class="history-empty">No gigs saved yet.</div>'; return; }
 
-  if (!hist.length) {
-    const empty = document.createElement("div");
-    empty.style.opacity = "0.8";
-    empty.textContent = "No gigs saved yet.";
-    historyEl.appendChild(empty);
-    updateMonthlyTotals();
-    return;
-  }
+  histEl.innerHTML = "";
+  gigs.forEach(([fbKey, g]) => {
+    const row = document.createElement("div"); row.className = "history-row";
+    const left = document.createElement("div"); left.className = "history-left";
 
-  const ordered = [...hist].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const l1 = document.createElement("div"); l1.className = "history-line1";
+    l1.textContent = `${g.date ? formatDateNice(g.date)+" — " : ""}${(g.town||"(no town)").trim()}`;
 
-  ordered.forEach(g => {
-    const row = document.createElement("div");
-    row.className = "history-row";
+    const l2 = document.createElement("div"); l2.className = "history-line2";
+    const tm = g.totalMiles != null ? ` • ${g.totalMiles.toFixed(1)}mi` : "";
+    const fc = g.fuelCost   != null ? ` • fuel £${g.fuelCost.toFixed(2)}` : "";
+    l2.textContent = `£${Math.round(g.fee||0)} • You £${Math.round(g.you||0)} • Steve £${Math.round(g.he||0)}${tm}${fc}`;
 
-    const left = document.createElement("div");
-    left.className = "history-left";
+    left.appendChild(l1); left.appendChild(l2);
 
-    const line1 = document.createElement("div");
-    const date = (g.date || "").trim();
-    const town = (g.town || "").trim() || "(no town)";
-    line1.textContent = `${date ? date + " " : ""}${town} — £${Math.round(g.fee || 0)} (${g.band || "—"})`;
+    if (g.notes) {
+      const ln = document.createElement("div"); ln.className = "history-notes"; ln.textContent = g.notes; left.appendChild(ln);
+    }
+    if (!g.paid) {
+      const up = document.createElement("div"); up.className = "history-unpaid"; up.textContent = "⚠ UNPAID"; left.appendChild(up);
+    }
 
-    const line2 = document.createElement("div");
-    line2.className = "history-meta";
-    const tm = Number.isFinite(g.totalMiles) ? g.totalMiles.toFixed(1) : "—";
-    const mc = Number.isFinite(g.mileageCost) ? g.mileageCost.toFixed(2) : "—";
-    line2.textContent = `Miles: ${tm} • Mileage: £${mc} • You: £${Math.round(g.you || 0)} • Steve: £${Math.round(g.he || 0)}`;
+    const actions = document.createElement("div"); actions.className = "history-actions";
 
-    left.appendChild(line1);
-    left.appendChild(line2);
+    const waBtn = document.createElement("button"); waBtn.className = "small-btn small-btn-whatsapp"; waBtn.textContent = "WA"; waBtn.onclick = () => openWhatsapp(g);
+    const icsBtn = document.createElement("button"); icsBtn.className = "small-btn"; icsBtn.textContent = "📅"; icsBtn.onclick = () => downloadIcs(g);
 
-    const right = document.createElement("div");
-    right.style.display = "flex";
-    right.style.gap = "8px";
-    right.style.alignItems = "center";
+    const paidBtn = document.createElement("button");
+    paidBtn.className = g.paid ? "small-btn small-btn-paid" : "small-btn small-btn-unpaid";
+    paidBtn.textContent = g.paid ? "✓ Paid" : "Unpaid";
+    paidBtn.onclick = () => update(ref(db, `gigs/${fbKey}`), { paid: !g.paid });
 
-    const share = document.createElement("button");
-    share.className = "small-btn";
-    share.textContent = "Share";
-    share.onclick = () => shareText(gigSummaryText(g));
+    const delBtn = document.createElement("button"); delBtn.className = "small-btn small-btn-danger"; delBtn.textContent = "Del";
+    delBtn.onclick = () => { if (confirm(`Delete gig: ${(g.town||"").trim()}?`)) remove(ref(db, `gigs/${fbKey}`)); };
 
-    const del = document.createElement("button");
-    del.className = "small-btn small-btn-danger";
-    del.textContent = "Delete";
-
-    // ✅ Delete works for new entries (with id) and old ones (without id)
-    del.onclick = () => {
-      const histNow = loadHistory();
-
-      if (g.id !== undefined && g.id !== null && g.id !== "") {
-        const next = histNow.filter(x => x.id !== g.id);
-        saveHistory(next);
-        renderHistory();
-        return;
-      }
-
-      // fallback signature delete for older entries
-      const sig = `${g.createdAt || ""}|${g.date || ""}|${g.town || ""}|${g.fee || ""}|${g.totalMiles || ""}`;
-      const idx = histNow.findIndex(x =>
-        `${x.createdAt || ""}|${x.date || ""}|${x.town || ""}|${x.fee || ""}|${x.totalMiles || ""}` === sig
-      );
-
-      if (idx >= 0) {
-        histNow.splice(idx, 1);
-        saveHistory(histNow);
-        renderHistory();
-      }
-    };
-
-    right.appendChild(share);
-    right.appendChild(del);
-
-    row.appendChild(left);
-    row.appendChild(right);
-    historyEl.appendChild(row);
+    [waBtn, icsBtn, paidBtn, delBtn].forEach(b => actions.appendChild(b));
+    row.appendChild(left); row.appendChild(actions);
+    histEl.appendChild(row);
   });
-
-  updateMonthlyTotals();
 }
 
-/* ---------- worth-it ---------- */
-function calcTimeHours(totalMiles, avgSpeed, setupHours, playHours) {
-  const travel = avgSpeed > 0 ? (totalMiles / avgSpeed) : 0;
-  return travel + setupHours + playHours;
-}
-function worthItLabel(hourly) {
-  if (hourly >= 25) return "✅ Worth it";
-  if (hourly >= 18) return "⚠ Marginal";
-  return "❌ Not worth it";
-}
+/* ===== CALCULATION ===== */
+let lastGig = null;
 
-/* ---------- UI helpers ---------- */
-function clearResultsUI() {
-  if (bandEl) bandEl.textContent = "—";
-  if (minFeeEl) minFeeEl.textContent = "—";
-  if (totalMilesEl) totalMilesEl.textContent = "—";
-  if (mileageCostEl) mileageCostEl.textContent = "—";
-  if (youGetEl) youGetEl.textContent = "—";
-  if (heGetsEl) heGetsEl.textContent = "—";
-  if (worthItEl) worthItEl.textContent = "—";
-  if (hourlyRateEl) hourlyRateEl.textContent = "—";
-  if (totalTimeEl) totalTimeEl.textContent = "—";
-}
-function showWarn(msg) {
-  if (!warningEl) return;
-  warningEl.textContent = msg;
-  warningEl.classList.remove("hidden");
-}
-function hideWarn() {
-  if (!warningEl) return;
-  warningEl.textContent = "";
-  warningEl.classList.add("hidden");
-}
-
-/* ---------- export CSV ---------- */
-function exportCSV() {
-  const hist = loadHistory().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  if (!hist.length) {
-    alert("No history to export.");
-    return;
-  }
-
-  const cols = [
-    "id","createdAt","date","town","fee","milesCbToVenue",
-    "totalMiles","mileageCost","band","minFee","you","he","hourly"
-  ];
-
-  const lines = [cols.join(",")];
-
-  hist.forEach(g => {
-    const row = cols.map(k => {
-      const v = g[k];
-      const s = (v === null || v === undefined) ? "" : String(v);
-      return `"${s.replaceAll('"','""')}"`;
-    }).join(",");
-    lines.push(row);
-  });
-
-  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "gig-history.csv";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  URL.revokeObjectURL(url);
-}
-
-/* ---------- core calculation ---------- */
 function calcAndRender() {
-  const milesCbToVenue = safeNumber(milesInput.value, 0);
-  const fee = safeNumber(feeInput.value, 0);
+  const milesOneWay = safeNum(document.getElementById("miles").value, 0);
+  const fee         = safeNum(document.getElementById("fee").value, 0);
+  if (milesOneWay <= 0 || fee <= 0) { showWarning("Enter a fee and miles first."); return; }
 
-  const rate = safeNumber(rateInput?.value, 0.45);
-  const avgSpeed = safeNumber(avgSpeedInput?.value, 40);
-  const setupHours = safeNumber(setupHoursInput?.value, 1);
-  const playHours = safeNumber(playHoursInput?.value, 2);
+  const s          = loadSettings();
+  const fuelCost   = calcFuelCost(milesOneWay * 2, safeNum(s.mpg), safeNum(s.fuelPrice));
+  const driverCost = fuelCost !== null ? fuelCost : 0;
+  const totalMiles = milesOneWay * 2;
 
-  if (milesCbToVenue <= 0 || fee <= 0) {
-    showWarn("Enter a fee and miles first.");
-    return;
-  }
+  const remainder  = Math.max(0, fee - driverCost);
+  let youCash      = roundTo10((remainder / 2) + driverCost);
+  youCash          = Math.max(0, Math.min(fee, youCash));
+  const heCash     = fee - youCash;
 
-  // ✅ Mileage ONLY: CB -> Venue -> CB
-  const totalMiles = milesCbToVenue * 2;
-  const mileageCost = totalMiles * rate;
+  const avgSpeed   = safeNum(s.avgSpeed, 40);
+  const totalHours = (avgSpeed > 0 ? totalMiles/avgSpeed : 0) + safeNum(s.setupHours,1) + safeNum(s.playHours,2);
+  const hourly     = totalHours > 0 ? youCash / totalHours : 0;
+  const netYou     = fuelCost !== null ? youCash - fuelCost : null;
+  const [band, minFee] = bandFor(milesOneWay);
 
-  const [band, minFee] = bandFor(milesCbToVenue);
+  document.getElementById("totalMiles").textContent = totalMiles.toFixed(1) + " mi";
+  const fuelRow = document.getElementById("fuelCostRow");
+  if (fuelCost !== null) { document.getElementById("fuelCost").textContent = money(fuelCost); fuelRow.classList.remove("hidden"); }
+  else fuelRow.classList.add("hidden");
 
-  // Split: mileage first, then 50/50
-  const remaining = Math.max(0, fee - mileageCost);
-  const split = remaining / 2;
+  document.getElementById("youGet").textContent   = "£" + Math.round(youCash);
+  document.getElementById("heGets").textContent   = "£" + Math.round(heCash);
+  document.getElementById("youNet").textContent   = netYou !== null ? `(£${Math.round(netYou)} after fuel)` : "";
+  document.getElementById("worthIt").textContent  = worthItLabel(hourly);
+  document.getElementById("hourlyRate").textContent = "£" + hourly.toFixed(2) + "/hr";
 
-  const rawYou = split + mileageCost;
+  if (fee < minFee) showWarning(`⚠️ Below ${band} minimum (£${minFee})`);
+  else if (fuelCost === null) showWarning("ℹ️ Set MPG and fuel price in Settings for fuel cost.");
+  else hideWarning();
 
-  // Driver-first rounding:
-  // 1) round your take to nearest £10
-  // 2) he gets exact remainder so total matches fee
-  let youCash = roundTo10(rawYou);
-  youCash = Math.max(0, Math.min(fee, youCash));
-  const heCash = fee - youCash;
-
-  const totalHours = calcTimeHours(totalMiles, avgSpeed, setupHours, playHours);
-  const hourly = totalHours > 0 ? (youCash / totalHours) : 0;
-
-  bandEl.textContent = band;
-  minFeeEl.textContent = "£" + Math.round(minFee);
-  totalMilesEl.textContent = totalMiles.toFixed(1);
-  mileageCostEl.textContent = money(mileageCost);
-
-  youGetEl.textContent = "£" + Math.round(youCash);
-  heGetsEl.textContent = "£" + Math.round(heCash);
-
-  worthItEl.textContent = worthItLabel(hourly);
-  hourlyRateEl.textContent = "£" + hourly.toFixed(2) + " / hr";
-  if (totalTimeEl) totalTimeEl.textContent = totalHours.toFixed(2) + " hrs";
-
-  if (fee < minFee) {
-    showWarn(`Below minimum for ${band} (£${Math.round(minFee)}).`);
-  } else {
-    hideWarn();
-  }
+  document.getElementById("resultsBlock").classList.remove("hidden");
 
   lastGig = {
-    id: makeId(),
-    createdAt: Date.now(),
-    date: (dateInput?.value || "").trim(),
-    town: (townInput?.value || "").trim(),
-    fee,
-    milesCbToVenue,
-    totalMiles,
-    mileageCost,
-    band,
-    minFee,
-    you: youCash,
-    he: heCash,
-    hourly
+    id: makeId(), createdAt: Date.now(),
+    date:  document.getElementById("date").value.trim(),
+    town:  document.getElementById("town").value.trim(),
+    notes: document.getElementById("notes").value.trim(),
+    fee, milesOneWay, totalMiles, fuelCost, band, minFee,
+    you: youCash, he: heCash, hourly, paid: false
   };
 
-  saveGigBtn.disabled = false;
-  shareBtn.disabled = false;
+  ["saveGigBtn","whatsappBtn","icsBtn","shareBtn"].forEach(id => document.getElementById(id).disabled = false);
 }
 
-/* ---------- handlers ---------- */
-calcBtn.onclick = () => {
-  hideWarn();
-  clearResultsUI();
-  calcAndRender();
+function showWarning(msg) { const w = document.getElementById("warning"); w.textContent = msg; w.classList.remove("hidden"); }
+function hideWarning()    { const w = document.getElementById("warning"); w.textContent = ""; w.classList.add("hidden"); }
+function clearResultsUI() {
+  ["totalMiles","fuelCost","youGet","heGets","worthIt","hourlyRate"].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = "—"; });
+  document.getElementById("youNet").textContent = "";
+  document.getElementById("resultsBlock").classList.add("hidden");
+}
+
+/* ===== HANDLERS ===== */
+document.getElementById("calcBtn").onclick = () => { hideWarning(); clearResultsUI(); calcAndRender(); };
+
+document.getElementById("saveTownBtn").onclick = () => {
+  const town = document.getElementById("town").value.trim();
+  const miles = safeNum(document.getElementById("miles").value, 0);
+  const notes = document.getElementById("notes").value.trim();
+  if (!town || miles <= 0) { showToast("Enter a town and miles first."); return; }
+  const towns = loadTowns(); towns[town] = { miles, notes }; saveTowns(towns); renderTownList();
+  showToast(`"${town}" saved`);
 };
 
-saveTownBtn.onclick = () => {
-  const town = (townInput.value || "").trim();
-  const miles = safeNumber(milesInput.value, 0);
-
-  if (!town || miles <= 0) {
-    alert("Type a town and miles first.");
-    return;
-  }
-
-  const towns = loadTowns();
-  towns[town] = miles;
-  saveTowns(towns);
-  renderTownList();
-  alert("Town saved.");
-};
-
-saveGigBtn.onclick = () => {
+document.getElementById("saveGigBtn").onclick = async () => {
   if (!lastGig) return;
-
-  // Default date if blank (helps monthly totals)
   if (!lastGig.date) lastGig.date = todayYMD();
-
-  const hist = loadHistory();
-  hist.push(lastGig);
-  saveHistory(hist);
-
-  renderHistory();
-
-  // ✅ Auto-clear inputs after saving
-  if (dateInput) dateInput.value = "";
-  if (townInput) townInput.value = "";
-  if (feeInput) feeInput.value = "";
-  if (milesInput) milesInput.value = "";
-
-  // Reset state & UI
-  lastGig = null;
-  saveGigBtn.disabled = true;
-  shareBtn.disabled = true;
-  clearResultsUI();
-  hideWarn();
+  try {
+    await push(ref(db, "gigs"), lastGig);
+    showToast("Gig saved & synced ✓");
+    ["date","town","fee","miles","notes"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("fee").classList.remove("input-warn");
+    document.getElementById("feeHint").classList.add("hidden");
+    lastGig = null;
+    ["saveGigBtn","whatsappBtn","icsBtn","shareBtn"].forEach(id => document.getElementById(id).disabled = true);
+    clearResultsUI(); hideWarning();
+  } catch(e) { showToast("Sync error — check connection."); console.error(e); }
 };
 
-shareBtn.onclick = () => {
-  if (!lastGig) return;
-  shareText(gigSummaryText(lastGig));
+document.getElementById("whatsappBtn").onclick = () => { if (lastGig) openWhatsapp(lastGig); };
+document.getElementById("icsBtn").onclick      = () => { if (lastGig) downloadIcs(lastGig); };
+document.getElementById("shareBtn").onclick    = () => { if (lastGig) shareText(gigSummaryText(lastGig)); };
+
+document.getElementById("exportCsvBtn").onclick = () => {
+  const gigs = Object.values(gigsData).sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
+  if (!gigs.length) { showToast("No history to export."); return; }
+  const cols = ["date","town","fee","milesOneWay","totalMiles","fuelCost","band","minFee","you","he","hourly","paid"];
+  const lines = [cols.join(","), ...gigs.map(g => cols.map(k => `"${(g[k]??"")}"`).join(","))];
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type:"text/csv" }));
+  a.download = "gig-history.csv";
+  document.body.appendChild(a); a.click(); a.remove();
 };
 
-exportCsvBtn.onclick = exportCSV;
-
-clearHistoryBtn.onclick = () => {
-  const ok = confirm("Clear all saved gig history on this phone?");
-  if (!ok) return;
-  localStorage.removeItem(HISTORY_KEY);
-  renderHistory();
+document.getElementById("clearHistoryBtn").onclick = async () => {
+  if (!confirm("Delete ALL gigs from the shared database? This affects both apps.")) return;
+  await set(ref(db, "gigs"), null);
+  showToast("History cleared.");
 };
 
-/* ---------- install button ---------- */
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  if (installBtn) installBtn.style.display = "inline-block";
-});
+/* ===== SETTINGS ===== */
+document.getElementById("settingsBtn").onclick = () => {
+  const s = loadSettings();
+  document.getElementById("settingMpg").value        = s.mpg        || "";
+  document.getElementById("settingFuelPrice").value  = s.fuelPrice  || "";
+  document.getElementById("settingWhatsapp").value   = s.whatsapp   || "";
+  document.getElementById("settingAvgSpeed").value   = s.avgSpeed   || "40";
+  document.getElementById("settingSetupHours").value = s.setupHours || "1";
+  document.getElementById("settingPlayHours").value  = s.playHours  || "2";
+  document.getElementById("settingsPanel").classList.remove("hidden");
+};
+document.getElementById("closeSettingsBtn").onclick = () => document.getElementById("settingsPanel").classList.add("hidden");
+document.getElementById("saveSettingsBtn").onclick  = () => {
+  saveSettings({
+    mpg:        safeNum(document.getElementById("settingMpg").value)        || null,
+    fuelPrice:  safeNum(document.getElementById("settingFuelPrice").value)  || null,
+    whatsapp:   document.getElementById("settingWhatsapp").value.trim(),
+    avgSpeed:   safeNum(document.getElementById("settingAvgSpeed").value, 40),
+    setupHours: safeNum(document.getElementById("settingSetupHours").value, 1),
+    playHours:  safeNum(document.getElementById("settingPlayHours").value, 2),
+  });
+  document.getElementById("settingsPanel").classList.add("hidden");
+  showToast("Settings saved ✓");
+};
 
-if (installBtn) {
-  installBtn.onclick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    try {
-      const choice = await deferredPrompt.userChoice;
-      if (choice?.outcome === "accepted") installBtn.style.display = "none";
-    } catch {}
-    deferredPrompt = null;
-  };
-}
-
-/* ---------- init ---------- */
-function init() {
-  renderTownList();
-  renderHistory();
-  clearResultsUI();
-  hideWarn();
-}
-init();
+/* ===== INIT ===== */
+renderTownList();
+renderCalendar();
+setSyncStatus("off");
