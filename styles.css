@@ -152,8 +152,8 @@ input.input-warn { border-color: var(--amber); }
 .avail-day.me-off { background: var(--red-dim); color: #fca5a5; border-color: var(--red); }
 .avail-day.steve-off { background: #78350f; color: var(--amber); border-color: #92400e; }
 .avail-day.both-off { background: #4a0d0d; border-color: var(--red); }
-.avail-day.has-gig::after { content: '♪'; position: absolute; bottom: 1px; right: 2px; font-size: 8px; color: var(--accent); }
-
+.avail-day.has-gig { border-color: var(--green); }
+.avail-day.has-gig::after { content: '♪'; position: absolute; bottom: 1px; right: 2px; font-size: 8px; color: var(--green); }
 .avail-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
 .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
