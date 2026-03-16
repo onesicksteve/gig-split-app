@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GigSplit — Migrate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+      --border: #2a2a3a; --text: #e8e8f0; --text-muted: #8888aa; --text-dim: #555570;
+      --accent: #6c63ff; --green: #22c55e; --amber: #f59e0b; --red: #ef4444;
+      --font-mono: 'Space Mono', monospace; --font: 'Outfit', sans-serif;
+    }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px; }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    h1 { font-family: var(--font-mono); font-size: 20px; margin-bottom: 6px; }
+    .sub { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .gig-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .gig-row:last-child { border-bottom: none; }
+    .gig-left { color: var(--text); }
+    .gig-right { color: var(--text-muted); font-size: 13px; font-family: var(--font-mono); }
+    .btn { padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 15px; border: none; cursor: pointer; font-family: var(--font); width: 100%; margin-top: 8px; transition: all 0.15s; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: #7c74ff; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-danger { background: #7f1d1d; color: #fca5a5; border: 1px solid var(--red); margin-top: 8px; }
+    .btn-danger:hover { background: #991b1b; }
+    .log { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: var(--font-mono); font-size: 12px; line-height: 1.8; max-height: 300px; overflow-y: auto; margin-top: 16px; }
+    .log-ok   { color: var(--green); }
+    .log-err  { color: var(--red); }
+    .log-info { color: var(--text-muted); }
+    .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 12px; }
+    .warning-box { background: #78350f; border: 1px solid var(--amber); color: var(--amber); padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GigSplit Migration</h1>
+  <p class="sub">One-time import of your existing gigs into Firebase.</p>
+
+  <div class="warning-box">
+    ⚠️ Only run this once. Running it twice will duplicate all your gigs.
+  </div>
+
+  <div class="card">
+    <div class="section-label">Gigs to import — <span id="gigCount">0</span> found</div>
+    <div id="gigList"></div>
+  </div>
+
+  <button class="btn btn-primary" id="importBtn">Import all gigs to Firebase</button>
+  <button class="btn btn-danger" id="clearBtn">⚠ Clear ALL Firebase gigs first (if needed)</button>
+
+  <div class="log hidden" id="log"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAvz5vVadBCJ4k-BbPmUup4wxRT-E1ydsk",
+  authDomain: "twosicksteves-7489a.firebaseapp.com",
+  databaseURL: "https://twosicksteves-7489a-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "twosicksteves-7489a",
+  storageBucket: "twosicksteves-7489a.firebasestorage.app",
+  messagingSenderId: "657952916089",
+  appId: "1:657952916089:web:968ac06abcc63b2654caa8"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+const raw = {"venues":[{"id":"8d35fc7565117819c101c816d","name":"Blue Bell, Conwy","oneWayMiles":6,"usualStart":"21:00","usualEnd":"23:00","notes":"","lastFee":250},{"id":"f8d65ba968222819c101f712a","name":"MotoCamp, Dolgellau","oneWayMiles":53,"usualStart":"21:00","usualEnd":"23:00","notes":"","lastFee":350},{"id":"17404f3aec70f819c10210204","name":"Barmouth Food Festival","oneWayMiles":58,"usualStart":"13:00","usualEnd":"15:00","notes":"","lastFee":350},{"id":"964cdb7c4071f819c10224b4a","name":"Cayley Arms, Rhos On Sea","oneWayMiles":2,"usualStart":"21:00","usualEnd":"23:00","notes":"","lastFee":220},{"id":"5cf62f8f9b76e19c10249a37","name":"Gladstonbury","oneWayMiles":0,"usualStart":"15:00","usualEnd":"23:00","notes":"","lastFee":1100},{"id":"2c3dfd6a2b296819c1025f803","name":"Castle View, Deganwy","oneWayMiles":6,"usualStart":"20:00","usualEnd":"22:00","notes":"","lastFee":250},{"id":"8445102b625ab819c7729979d","name":"The Raven Cafe Bar","miles":17,"start":"20:30","end":"22:30","notes":""},{"id":"9f035ca17684a819c772b982b","name":"The Anglers","miles":2,"start":"21:00","end":"23:00","notes":""},{"id":"3a2fb806eabf4819cf5e3e8c7","name":"The Gladstone","miles":10,"start":"","end":"","notes":""}],"gigs":[{"isFree":false,"id":"d5505dd449bbd819c101ca3bf","date":"2026-01-30","venueId":"8d35fc7565117819c101c816d","startTime":"21:00","endTime":"23:00","fee":250,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":6,"roundTripMiles":12,"mileageRate":0.45,"mileagePayout":5,"driverKey":"A","payoutA":130,"payoutB":120,"updatedAt":1769796838335,"createdAt":1769796838335},{"isFree":false,"id":"794ce962dd57c19c101cade8","date":"2026-03-28","venueId":"8d35fc7565117819c101c816d","startTime":"21:00","endTime":"23:00","fee":250,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":6,"roundTripMiles":12,"mileageRate":0.45,"mileagePayout":5,"driverKey":"A","payoutA":130,"payoutB":120,"updatedAt":1769796855862,"createdAt":1769796840936},{"isFree":false,"id":"152050e2c9218819c101cf989","date":"2026-07-03","venueId":"8d35fc7565117819c101c816d","startTime":"21:00","endTime":"23:00","fee":250,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":6,"roundTripMiles":12,"mileageRate":0.45,"mileagePayout":5,"driverKey":"A","payoutA":130,"payoutB":120,"updatedAt":1769796893270,"createdAt":1769796860297},{"isFree":false,"id":"6851f49502866819c101d9a68","date":"2026-08-28","venueId":"8d35fc7565117819c101c816d","startTime":"21:00","endTime":"23:00","fee":250,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":6,"roundTripMiles":12,"mileageRate":0.45,"mileagePayout":5,"driverKey":"A","payoutA":130,"payoutB":120,"updatedAt":1769796916574,"createdAt":1769796901480},{"isFree":false,"id":"c57b4f358e8bf819c101de33a","date":"2026-10-03","venueId":"8d35fc7565117819c101c816d","startTime":"21:00","endTime":"23:00","fee":250,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":6,"roundTripMiles":12,"mileageRate":0.45,"mileagePayout":5,"driverKey":"A","payoutA":130,"payoutB":120,"updatedAt":1769796936374,"createdAt":1769796920122},{"isFree":false,"id":"690d4de828ba519c101e35f5","date":"2026-12-05","venueId":"8d35fc7565117819c101c816d","startTime":"21:00","endTime":"23:00","fee":250,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":6,"roundTripMiles":12,"mileageRate":0.45,"mileagePayout":5,"driverKey":"A","payoutA":130,"payoutB":120,"updatedAt":1769796952142,"createdAt":1769796941301},{"isFree":false,"id":"748c985581517819c101fdb80","date":"2026-03-14","venueId":"f8d65ba968222819c101f712a","startTime":"21:00","endTime":"23:00","fee":350,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":53,"roundTripMiles":106,"mileageRate":0.45,"mileagePayout":48,"driverKey":"A","payoutA":200,"payoutB":150,"updatedAt":1769797049217,"createdAt":1769797049217},{"isFree":false,"id":"f36c73a090b2419c1021b1d4","date":"2026-07-05","venueId":"17404f3aec70f819c10210204","startTime":"13:00","endTime":"15:00","fee":350,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":58,"roundTripMiles":116,"mileageRate":0.45,"mileagePayout":52,"driverKey":"A","payoutA":200,"payoutB":150,"updatedAt":1769797169620,"createdAt":1769797169620},{"isFree":false,"id":"2af0550fdffb819c1023e0ca","date":"2026-07-25","venueId":"964cdb7c4071f819c10224b4a","startTime":"21:00","endTime":"23:00","fee":220,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":2,"roundTripMiles":4,"mileageRate":0.45,"mileagePayout":2,"driverKey":"A","payoutA":110,"payoutB":110,"updatedAt":1769797312714,"createdAt":1769797312714},{"isFree":false,"id":"c22e991fcfaa9819c1024d35b","date":"2026-08-29","venueId":"5cf62f8f9b76e19c10249a37","startTime":"15:00","endTime":"23:00","fee":1100,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":0,"roundTripMiles":0,"mileageRate":0.45,"mileagePayout":0,"driverKey":"A","payoutA":550,"payoutB":550,"updatedAt":1769797374811,"createdAt":1769797374811},{"isFree":false,"id":"8158f12264c49819c10263a51","date":"2026-05-01","venueId":"2c3dfd6a2b296819c1025f803","startTime":"20:00","endTime":"22:00","fee":250,"paymentMethod":"Cash","cancelled":false,"notes":"","overrideMiles":false,"oneWayMiles":6,"roundTripMiles":12,"mileageRate":0.45,"mileagePayout":5,"driverKey":"A","payoutA":130,"payoutB":120,"updatedAt":1769797466705,"createdAt":1769797466705},{"id":"d38cb1e3f7d3319c772a752c","date":"2026-04-05","venueId":"8445102b625ab819c7729979d","startTime":"20:30","endTime":"22:30","isFree":false,"fee":250,"paymentMethod":"Cash","cancelled":false,"driver":"A","notes":"","oneWayMiles":17,"overrideMiles":null,"roundTripMiles":34,"mileagePayout":15,"payoutA":130,"payoutB":120},{"id":"3a54851e4397719c772be961","date":"2026-08-22","venueId":"9f035ca17684a819c772b982b","startTime":"21:00","endTime":"23:00","isFree":false,"fee":200,"paymentMethod":"Cash","cancelled":false,"driver":"A","notes":"","oneWayMiles":2,"overrideMiles":null,"roundTripMiles":4,"mileagePayout":2,"payoutA":100,"payoutB":100},{"id":"62aa0049fcd61819cf5e43cce","date":"2026-03-21","venueId":"3a2fb806eabf4819cf5e3e8c7","startTime":"20:30","endTime":"","isFree":false,"fee":250,"paymentMethod":"Cash","cancelled":false,"driver":"A","notes":"","oneWayMiles":10,"overrideMiles":null,"roundTripMiles":20,"mileagePayout":9,"payoutA":130,"payoutB":120}]};
+
+const venueMap = {};
+raw.venues.forEach(v => { venueMap[v.id] = v; });
+
+function convertGig(g) {
+  const venue       = venueMap[g.venueId] || {};
+  const town        = venue.name || "(unknown venue)";
+  const milesOneWay = g.oneWayMiles || 0;
+  const totalMiles  = g.roundTripMiles || milesOneWay * 2;
+  const fee         = g.fee || 0;
+  const you         = g.payoutA || 0;
+  const he          = g.payoutB || 0;
+  return {
+    id: g.id, createdAt: g.createdAt || Date.now(),
+    date: g.date || "", town, notes: g.notes || "",
+    fee, milesOneWay, totalMiles, fuelCost: null,
+    you, he, paid: false,
+    startTime: g.startTime || "", endTime: g.endTime || ""
+  };
+}
+
+const converted = raw.gigs.filter(g => !g.cancelled).map(convertGig)
+  .sort((a,b) => a.date.localeCompare(b.date));
+
+document.getElementById("gigCount").textContent = converted.length;
+
+const listEl = document.getElementById("gigList");
+converted.forEach(g => {
+  const row = document.createElement("div");
+  row.className = "gig-row";
+  row.innerHTML = `<div class="gig-left">${g.date} — ${g.town}</div><div class="gig-right">£${g.fee} • You £${g.you} / SWJ £${g.he}</div>`;
+  listEl.appendChild(row);
+});
+
+const logEl = document.getElementById("log");
+function log(msg, type = "info") {
+  logEl.classList.remove("hidden");
+  const line = document.createElement("div");
+  line.className = `log-${type}`;
+  line.textContent = msg;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+document.getElementById("importBtn").onclick = async () => {
+  const btn = document.getElementById("importBtn");
+  btn.disabled = true;
+  btn.textContent = "Importing…";
+  log(`Starting import of ${converted.length} gigs…`, "info");
+  let ok = 0, fail = 0;
+  for (const gig of converted) {
+    try {
+      await push(ref(db, "gigs"), gig);
+      log(`✓ ${gig.date} — ${gig.town}`, "ok");
+      ok++;
+    } catch(e) {
+      log(`✗ ${gig.date} — ${gig.town}: ${e.message}`, "err");
+      fail++;
+    }
+  }
+  log(`Done. ${ok} imported, ${fail} failed.`, ok === converted.length ? "ok" : "err");
+  btn.textContent = "Import complete ✓";
+};
+
+document.getElementById("clearBtn").onclick = async () => {
+  if (!confirm("This will DELETE all gigs from Firebase. Are you sure?")) return;
+  try {
+    await set(ref(db, "gigs"), null);
+    log("All Firebase gigs cleared.", "info");
+  } catch(e) {
+    log("Clear failed: " + e.message, "err");
+  }
+};
+</script>
+</body>
+</html>
