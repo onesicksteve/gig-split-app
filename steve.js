@@ -237,7 +237,7 @@ function renderSteve1UnavailList() {
   if (!el) return;
   const dates = Object.keys(steve1Unavail).filter(d => d >= todayYMD()).sort();
   if (!dates.length) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div class="unavail-title">Other Steve unavailable</div>` +
+  el.innerHTML = `<div class="unavail-title">Steve White unavailable</div>` +
     dates.map(d => `<div class="unavail-item">⚠ ${formatDateNice(d)}</div>`).join("");
 }
 

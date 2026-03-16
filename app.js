@@ -200,7 +200,7 @@ function renderCalendar() {
   html += `</div>
     <div class="avail-legend">
       <div class="legend-item"><div class="legend-dot legend-me"></div> You unavailable</div>
-      <div class="legend-item"><div class="legend-dot legend-steve"></div> Steve unavailable</div>
+      <div class="legend-item"><div class="legend-dot legend-steve"></div> SWJ unavailable</div>
       <div class="legend-item"><div class="legend-dot legend-gig"></div> Gig booked</div>
     </div>`;
 
@@ -237,7 +237,7 @@ function renderSteveUnavailList() {
   if (!el) return;
   const dates = Object.keys(steveUnavail).filter(d => d >= todayYMD()).sort();
   if (!dates.length) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div class="unavail-title">Steve unavailable</div>` +
+  el.innerHTML = `<div class="unavail-title">SWJ unavailable</div>` +
     dates.map(d => `<div class="unavail-item">⚠ ${formatDateNice(d)}</div>`).join("");
 }
 
@@ -332,7 +332,7 @@ function renderHistory() {
     const l2 = document.createElement("div"); l2.className = "history-line2";
     const tm = g.totalMiles != null ? ` • ${g.totalMiles.toFixed(1)}mi` : "";
     const fc = g.fuelCost   != null ? ` • fuel £${g.fuelCost.toFixed(2)}` : "";
-    l2.textContent = `£${Math.round(g.fee||0)} • You £${Math.round(g.you||0)} • Steve £${Math.round(g.he||0)}${tm}${fc}`;
+    l2.textContent = `£${Math.round(g.fee||0)} • You £${Math.round(g.you||0)} • SWJ £${Math.round(g.he||0)}${tm}${fc}`;
 
     left.appendChild(l1); left.appendChild(l2);
 
