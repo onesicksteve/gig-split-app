@@ -465,6 +465,18 @@ document.getElementById("exportCsvBtn").onclick = () => {
   document.body.appendChild(a); a.click(); a.remove();
 };
 
+document.getElementById("shareGigsBtn").onclick = async () => {
+  const today = todayYMD();
+  const upcoming = Object.values(gigsData)
+    .filter(g => (g.date || "") >= today)
+    .sort((a,b) => (a.date||"").localeCompare(b.date||""));
+  if (!upcoming.length) { showToast("No upcoming gigs to share."); return; }
+  const lines = ["🎸 Two Sick Steves Upcoming Gigs\n",
+    ...upcoming.map(g => `${formatDateNice(g.date)} — ${(g.town||"").trim()}`)
+  ];
+  await shareText(lines.join("\n"));
+};
+
 document.getElementById("clearHistoryBtn").onclick = async () => {
   if (!confirm("Delete ALL gigs from the shared database? This affects both apps.")) return;
   await set(ref(db, "gigs"), null);
