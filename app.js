@@ -317,7 +317,7 @@ async function shareText(text) {
 function renderHistory() {
   const histEl = document.getElementById("history");
   if (!histEl) return;
- const gigs = Object.entries(gigsData).sort((a,b) => (b[1].date||"") > (a[1].date||"") ? 1 : -1);
+ const gigs = Object.entries(gigsData).sort((a,b) => (a[1].date||"").localeCompare(b[1].date||""));
   if (!gigs.length) { histEl.innerHTML = '<div class="history-empty">No gigs saved yet.</div>'; return; }
 
   histEl.innerHTML = "";
