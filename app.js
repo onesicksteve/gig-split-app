@@ -314,51 +314,87 @@ async function shareText(text) {
   catch { alert("Could not share."); }
 }
 
+function makeGigRow(fbKey, g) {
+  const row = document.createElement("div"); row.className = "history-row";
+  const left = document.createElement("div"); left.className = "history-left";
+
+  const l1 = document.createElement("div"); l1.className = "history-line1";
+  l1.textContent = `${g.date ? formatDateNice(g.date)+" — " : ""}${(g.town||"(no town)").trim()}`;
+
+  const l2 = document.createElement("div"); l2.className = "history-line2";
+  const tm = g.totalMiles != null ? ` • ${g.totalMiles.toFixed(1)}mi` : "";
+  const fc = g.fuelCost   != null ? ` • fuel £${g.fuelCost.toFixed(2)}` : "";
+  l2.textContent = `£${Math.round(g.fee||0)} • You £${Math.round(g.you||0)} • SWJ £${Math.round(g.he||0)}${tm}${fc}`;
+
+  left.appendChild(l1); left.appendChild(l2);
+
+  if (g.notes) {
+    const ln = document.createElement("div"); ln.className = "history-notes"; ln.textContent = g.notes; left.appendChild(ln);
+  }
+  if (!g.paid) {
+    const up = document.createElement("div"); up.className = "history-unpaid"; up.textContent = "⚠ UNPAID"; left.appendChild(up);
+  }
+
+  const actions = document.createElement("div"); actions.className = "history-actions";
+  const waBtn = document.createElement("button"); waBtn.className = "small-btn small-btn-whatsapp"; waBtn.textContent = "WA"; waBtn.onclick = () => openWhatsapp(g);
+  const icsBtn = document.createElement("button"); icsBtn.className = "small-btn"; icsBtn.textContent = "📅"; icsBtn.onclick = () => downloadIcs(g);
+  const paidBtn = document.createElement("button");
+  paidBtn.className = g.paid ? "small-btn small-btn-paid" : "small-btn small-btn-unpaid";
+  paidBtn.textContent = g.paid ? "✓ Paid" : "Unpaid";
+  paidBtn.onclick = () => update(ref(db, `gigs/${fbKey}`), { paid: !g.paid });
+  const delBtn = document.createElement("button"); delBtn.className = "small-btn small-btn-danger"; delBtn.textContent = "Del";
+  delBtn.onclick = () => { if (confirm(`Delete gig: ${(g.town||"").trim()}?`)) remove(ref(db, `gigs/${fbKey}`)); };
+  [waBtn, icsBtn, paidBtn, delBtn].forEach(b => actions.appendChild(b));
+  row.appendChild(left); row.appendChild(actions);
+  return row;
+}
+
 function renderHistory() {
   const histEl = document.getElementById("history");
   if (!histEl) return;
- const gigs = Object.entries(gigsData).sort((a,b) => (a[1].date||"").localeCompare(b[1].date||""));
-  if (!gigs.length) { histEl.innerHTML = '<div class="history-empty">No gigs saved yet.</div>'; return; }
+
+  const today = todayYMD();
+  const all = Object.entries(gigsData).sort((a,b) => (a[1].date||"").localeCompare(b[1].date||""));
+
+  if (!all.length) { histEl.innerHTML = '<div class="history-empty">No gigs saved yet.</div>'; return; }
+
+  const upcoming = all.filter(([,g]) => (g.date||"") >= today);
+  const past     = all.filter(([,g]) => (g.date||"")  < today);
 
   histEl.innerHTML = "";
-  gigs.forEach(([fbKey, g]) => {
-    const row = document.createElement("div"); row.className = "history-row";
-    const left = document.createElement("div"); left.className = "history-left";
 
-    const l1 = document.createElement("div"); l1.className = "history-line1";
-    l1.textContent = `${g.date ? formatDateNice(g.date)+" — " : ""}${(g.town||"(no town)").trim()}`;
+  if (upcoming.length) {
+    upcoming.forEach(([fbKey, g]) => histEl.appendChild(makeGigRow(fbKey, g)));
+  } else {
+    const empty = document.createElement("div"); empty.className = "history-empty"; empty.textContent = "No upcoming gigs.";
+    histEl.appendChild(empty);
+  }
 
-    const l2 = document.createElement("div"); l2.className = "history-line2";
-    const tm = g.totalMiles != null ? ` • ${g.totalMiles.toFixed(1)}mi` : "";
-    const fc = g.fuelCost   != null ? ` • fuel £${g.fuelCost.toFixed(2)}` : "";
-    l2.textContent = `£${Math.round(g.fee||0)} • You £${Math.round(g.you||0)} • SWJ £${Math.round(g.he||0)}${tm}${fc}`;
+  if (past.length) {
+    const byYear = {};
+    past.forEach(([fbKey, g]) => {
+      const year = (g.date||"").slice(0,4) || "Unknown";
+      if (!byYear[year]) byYear[year] = [];
+      byYear[year].push([fbKey, g]);
+    });
 
-    left.appendChild(l1); left.appendChild(l2);
-
-    if (g.notes) {
-      const ln = document.createElement("div"); ln.className = "history-notes"; ln.textContent = g.notes; left.appendChild(ln);
-    }
-    if (!g.paid) {
-      const up = document.createElement("div"); up.className = "history-unpaid"; up.textContent = "⚠ UNPAID"; left.appendChild(up);
-    }
-
-    const actions = document.createElement("div"); actions.className = "history-actions";
-
-    const waBtn = document.createElement("button"); waBtn.className = "small-btn small-btn-whatsapp"; waBtn.textContent = "WA"; waBtn.onclick = () => openWhatsapp(g);
-    const icsBtn = document.createElement("button"); icsBtn.className = "small-btn"; icsBtn.textContent = "📅"; icsBtn.onclick = () => downloadIcs(g);
-
-    const paidBtn = document.createElement("button");
-    paidBtn.className = g.paid ? "small-btn small-btn-paid" : "small-btn small-btn-unpaid";
-    paidBtn.textContent = g.paid ? "✓ Paid" : "Unpaid";
-    paidBtn.onclick = () => update(ref(db, `gigs/${fbKey}`), { paid: !g.paid });
-
-    const delBtn = document.createElement("button"); delBtn.className = "small-btn small-btn-danger"; delBtn.textContent = "Del";
-    delBtn.onclick = () => { if (confirm(`Delete gig: ${(g.town||"").trim()}?`)) remove(ref(db, `gigs/${fbKey}`)); };
-
-    [waBtn, icsBtn, paidBtn, delBtn].forEach(b => actions.appendChild(b));
-    row.appendChild(left); row.appendChild(actions);
-    histEl.appendChild(row);
-  });
+    Object.keys(byYear).sort((a,b) => b-a).forEach(year => {
+      const gigs = byYear[year].sort((a,b) => (b[1].date||"").localeCompare(a[1].date||""));
+      const folder = document.createElement("div"); folder.className = "year-folder";
+      const header = document.createElement("div"); header.className = "year-folder-header";
+      header.innerHTML = `<span class="year-folder-label">📁 ${year}</span><span class="year-folder-count">${gigs.length} gig${gigs.length !== 1 ? "s" : ""}</span><span class="year-folder-chevron">▸</span>`;
+      const body = document.createElement("div"); body.className = "year-folder-body hidden";
+      gigs.forEach(([fbKey, g]) => body.appendChild(makeGigRow(fbKey, g)));
+      header.onclick = () => {
+        const isOpen = !body.classList.contains("hidden");
+        body.classList.toggle("hidden");
+        header.querySelector(".year-folder-chevron").textContent = isOpen ? "▸" : "▾";
+      };
+      folder.appendChild(header);
+      folder.appendChild(body);
+      histEl.appendChild(folder);
+    });
+  }
 }
 
 /* ===== CALCULATION ===== */
@@ -454,7 +490,7 @@ document.getElementById("icsBtn").onclick      = () => { if (lastGig) downloadIc
 document.getElementById("shareBtn").onclick    = () => { if (lastGig) shareText(gigSummaryText(lastGig)); };
 
 document.getElementById("exportCsvBtn").onclick = () => {
-  const gigs = Object.entries(gigsData).sort((a,b) => (b[1].date||"").localeCompare(a[1].date||""));
+  const gigs = Object.values(gigsData).sort((a,b) => (a.date||"").localeCompare(b.date||""));
   if (!gigs.length) { showToast("No history to export."); return; }
   const cols = ["date","town","fee","milesOneWay","totalMiles","fuelCost","you","he","paid","startTime","endTime","notes"];
   const lines = [cols.join(","), ...gigs.map(g => cols.map(k => `"${(g[k]??"")}"`).join(","))];
