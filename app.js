@@ -455,7 +455,7 @@ document.getElementById("icsBtn").onclick      = () => { if (lastGig) downloadIc
 document.getElementById("shareBtn").onclick    = () => { if (lastGig) shareText(gigSummaryText(lastGig)); };
 
 document.getElementById("exportCsvBtn").onclick = () => {
-  const gigs = Object.values(gigsData).sort((a,b) => (a.date||"").localeCompare(b.date||""));
+  const gigs = Object.entries(gigsData).sort((a,b) => (b[1].date||"").localeCompare(a[1].date||""));
   if (!gigs.length) { showToast("No history to export."); return; }
   const cols = ["date","town","fee","milesOneWay","totalMiles","fuelCost","you","he","paid","startTime","endTime","notes"];
   const lines = [cols.join(","), ...gigs.map(g => cols.map(k => `"${(g[k]??"")}"`).join(","))];
