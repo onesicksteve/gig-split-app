@@ -93,8 +93,8 @@ input.input-warn { border-color: var(--amber); }
 .history-row:last-child { border-bottom: none; }
 .history-left { flex: 1; min-width: 0; }
 .history-date { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
-.history-line1 { font-size: 15px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.history-line2 { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.history-line1 { font-size: 15px; font-weight: 600; color: var(--text); white-space: normal; word-break: break-word; }
+.history-line2 { font-size: 12px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .history-unpaid { font-size: 11px; color: var(--amber); font-weight: 600; margin-top: 3px; }
 .history-actions { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; }
 
