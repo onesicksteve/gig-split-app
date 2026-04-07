@@ -16,7 +16,7 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
-/* ===== SYNC INDICATOR ===== */
+/* ===== SYNC ===== */
 function setSyncStatus(status) {
   const dot = document.getElementById("syncIndicator");
   if (!dot) return;
@@ -90,22 +90,27 @@ function renderTownList() {
   });
 }
 
+function autoSaveTown(town, miles) {
+  if (!town || miles <= 0) return;
+  const towns = loadTowns();
+  towns[town] = { miles };
+  saveTowns(towns);
+  renderTownList();
+}
+
 document.getElementById("town").addEventListener("change", () => {
   const rec = loadTowns()[document.getElementById("town").value.trim()];
   if (!rec) return;
   if (typeof rec === "number") { document.getElementById("miles").value = rec; }
-  else {
-    if (rec.miles) document.getElementById("miles").value = rec.miles;
-    if (rec.notes) document.getElementById("notes").value = rec.notes;
-  }
+  else { if (rec.miles) document.getElementById("miles").value = rec.miles; }
   updateFeeHint();
 });
 
 /* ===== FEE HINT ===== */
 function updateFeeHint() {
-  const fee = safeNum(document.getElementById("fee").value, 0);
+  const fee   = safeNum(document.getElementById("fee").value, 0);
   const miles = safeNum(document.getElementById("miles").value, 0);
-  const feeEl = document.getElementById("fee");
+  const feeEl  = document.getElementById("fee");
   const hintEl = document.getElementById("feeHint");
   if (miles > 0 && fee > 0) {
     const [band, min] = bandFor(miles);
@@ -123,30 +128,25 @@ document.getElementById("fee").addEventListener("input", updateFeeHint);
 document.getElementById("miles").addEventListener("input", updateFeeHint);
 
 /* ===== FIREBASE DATA ===== */
-let gigsData = {};
-let myUnavail = {};
-let steveUnavail = {};
+let gigsData    = {};
+let myUnavail   = {};
+let steveUnavail= {};
 
-// Listen to gigs
 onValue(ref(db, "gigs"), snap => {
   gigsData = snap.val() || {};
   setSyncStatus("on");
   renderHistory();
-  renderStats();
   renderCalendar();
 }, err => { setSyncStatus("err"); console.error(err); });
 
-// Listen to my unavailability
 onValue(ref(db, "unavail/steve1"), snap => {
   myUnavail = snap.val() || {};
   renderCalendar();
 });
 
-// Listen to Steve's unavailability
 onValue(ref(db, "unavail/steve2"), snap => {
   steveUnavail = snap.val() || {};
   renderCalendar();
-  renderSteveUnavailList();
 });
 
 /* ===== AVAILABILITY CALENDAR ===== */
@@ -157,14 +157,12 @@ function renderCalendar() {
   const container = document.getElementById("availCalendar");
   if (!container) return;
 
-  const todayStr = todayYMD();
-  const gigDates = new Set(Object.values(gigsData).map(g => g.date).filter(Boolean));
-
-  // Header
-  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const todayStr  = todayYMD();
+  const gigDates  = new Set(Object.values(gigsData).map(g => g.date).filter(Boolean));
+  const monthNames= ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const firstDay  = new Date(calYear, calMonth, 1).getDay();
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
-  const startOffset = (firstDay === 0 ? 6 : firstDay - 1); // Mon-first
+  const startOffset = (firstDay === 0 ? 6 : firstDay - 1);
 
   let html = `
     <div class="avail-month-header">
@@ -179,7 +177,7 @@ function renderCalendar() {
   for (let i = 0; i < startOffset; i++) html += `<div class="avail-day empty"></div>`;
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const ymd = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const ymd     = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const isPast  = ymd < todayStr;
     const isToday = ymd === todayStr;
     const meOff   = !!myUnavail[ymd];
@@ -187,12 +185,12 @@ function renderCalendar() {
     const hasGig  = gigDates.has(ymd);
 
     let cls = "avail-day";
-    if (isPast)           cls += " past";
-    else if (isToday)     cls += " today";
+    if (isPast)            cls += " past";
+    else if (isToday)      cls += " today";
     if (meOff && steveOff) cls += " both-off";
-    else if (meOff)       cls += " me-off";
-    else if (steveOff)    cls += " steve-off";
-    if (hasGig)           cls += " has-gig";
+    else if (meOff)        cls += " me-off";
+    else if (steveOff)     cls += " steve-off";
+    if (hasGig)            cls += " has-gig";
 
     html += `<div class="${cls}" data-date="${ymd}">${d}</div>`;
   }
@@ -207,14 +205,11 @@ function renderCalendar() {
   container.innerHTML = html;
 
   document.getElementById("calPrev").onclick = () => {
-    calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
-    renderCalendar();
+    calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar();
   };
   document.getElementById("calNext").onclick = () => {
-    calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
-    renderCalendar();
+    calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar();
   };
-
   container.querySelectorAll(".avail-day[data-date]").forEach(el => {
     if (el.classList.contains("past")) return;
     el.addEventListener("click", () => toggleMyUnavail(el.dataset.date));
@@ -223,65 +218,16 @@ function renderCalendar() {
 
 async function toggleMyUnavail(ymd) {
   const r = ref(db, `unavail/steve1/${ymd}`);
-  if (myUnavail[ymd]) {
-    await remove(r);
-    showToast("Available again: " + formatDateNice(ymd));
-  } else {
-    await set(r, true);
-    showToast("Blocked: " + formatDateNice(ymd));
-  }
+  if (myUnavail[ymd]) { await remove(r); showToast("Available again: " + formatDateNice(ymd)); }
+  else { await set(r, true); showToast("Blocked: " + formatDateNice(ymd)); }
 }
 
-function renderSteveUnavailList() {
-  const el = document.getElementById("steveUnavail");
-  if (!el) return;
-  const dates = Object.keys(steveUnavail).filter(d => d >= todayYMD()).sort();
-  if (!dates.length) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div class="unavail-title">SWJ unavailable</div>` +
-    dates.map(d => `<div class="unavail-item">⚠ ${formatDateNice(d)}</div>`).join("");
-}
-
-/* ===== STATS ===== */
-let activeTab = "month";
-
-function computeStats(filter) {
-  const now = new Date();
-  let gigs = 0, miles = 0, you = 0, fuel = 0, hasFuel = false;
-  Object.values(gigsData).forEach(g => {
-    const d = parseYMD(g.date) || new Date(g.createdAt || 0);
-    if (filter === "month" && (d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth())) return;
-    if (filter === "year"  && d.getFullYear() !== now.getFullYear()) return;
-    gigs++;
-    miles += safeNum(g.totalMiles);
-    you   += safeNum(g.you);
-    if (g.fuelCost != null) { fuel += safeNum(g.fuelCost); hasFuel = true; }
-  });
-  return { gigs, miles: Math.round(miles), you: Math.round(you), fuel: hasFuel ? fuel : null };
-}
-
-function renderStats() {
-  const s = computeStats(activeTab);
-  document.getElementById("statGigs").textContent  = s.gigs;
-  document.getElementById("statMiles").textContent = s.miles;
-  document.getElementById("statYou").textContent   = "£" + s.you;
-  document.getElementById("statFuel").textContent  = s.fuel != null ? "£" + s.fuel.toFixed(2) : "—";
-}
-
-document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    activeTab = btn.dataset.tab;
-    renderStats();
-  });
-});
-
-/* ===== HISTORY ===== */
+/* ===== GIG SUMMARY ===== */
 function gigSummaryText(g) {
   const town = (g.town||"").trim() || "(no town)";
   const date = g.date ? formatDateNice(g.date) : "";
   const fuel = g.fuelCost != null ? `Fuel: £${g.fuelCost.toFixed(2)}\n` : "";
-  return `🎸 ${date ? date+" — " : ""}${town}\nFee: £${Math.round(g.fee||0)}\nMiles: ${g.totalMiles!=null?g.totalMiles.toFixed(1):"—"} (return)\n${fuel}\n💰 You: £${Math.round(g.you||0)}\n💰 Steve: £${Math.round(g.he||0)}`.trim();
+  return `🎸 ${date ? date+" — " : ""}${town}\nFee: £${Math.round(g.fee||0)}\nMiles: ${g.totalMiles!=null?g.totalMiles.toFixed(1):"—"} (return)\n${fuel}\n💰 You: £${Math.round(g.you||0)}\n💰 SWJ: £${Math.round(g.he||0)}`.trim();
 }
 
 function openWhatsapp(g) {
@@ -300,7 +246,7 @@ function downloadIcs(g) {
     `UID:${g.id||makeId()}@gigsplit`,`DTSTAMP:${dt}T120000Z`,
     `DTSTART;VALUE=DATE:${dt}`,`DTEND;VALUE=DATE:${dt}`,
     `SUMMARY:🎸 Gig – ${town}`,
-    `DESCRIPTION:Fee: £${Math.round(g.fee||0)}\\nYou: £${Math.round(g.you||0)}\\nSteve: £${Math.round(g.he||0)}`,
+    `DESCRIPTION:Fee: £${Math.round(g.fee||0)}\\nYou: £${Math.round(g.you||0)}\\nSWJ: £${Math.round(g.he||0)}`,
     `LOCATION:${town}`,"END:VEVENT","END:VCALENDAR"].join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([ics], { type:"text/calendar" }));
@@ -314,37 +260,103 @@ async function shareText(text) {
   catch { alert("Could not share."); }
 }
 
+function exportGigCsv(g) {
+  const cols = ["date","town","fee","milesOneWay","totalMiles","fuelCost","you","he","paid","startTime","endTime"];
+  const lines = [cols.join(","), cols.map(k => `"${(g[k]??"")}"`).join(",")];
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type:"text/csv" }));
+  const town = (g.town||"gig").replace(/\s+/g,"-").toLowerCase();
+  a.download = `${g.date||"gig"}-${town}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ===== EDIT GIG ===== */
+let editingFbKey = null;
+
+function openEditPanel(fbKey, g) {
+  editingFbKey = fbKey;
+  document.getElementById("editDate").value  = g.date  || "";
+  document.getElementById("editTown").value  = g.town  || "";
+  document.getElementById("editFee").value   = g.fee   || "";
+  document.getElementById("editMiles").value = g.milesOneWay || g.oneWayMiles || "";
+  document.getElementById("editPanel").classList.remove("hidden");
+}
+
+document.getElementById("closeEditBtn").onclick = () => {
+  document.getElementById("editPanel").classList.add("hidden");
+  editingFbKey = null;
+};
+
+document.getElementById("saveEditBtn").onclick = async () => {
+  if (!editingFbKey) return;
+  const milesOneWay = safeNum(document.getElementById("editMiles").value, 0);
+  const fee         = safeNum(document.getElementById("editFee").value, 0);
+  const totalMiles  = milesOneWay * 2;
+  const s           = loadSettings();
+  const fuelCost    = calcFuelCost(totalMiles, safeNum(s.mpg), safeNum(s.fuelPrice));
+  const driverCost  = fuelCost !== null ? fuelCost : 0;
+  const remainder   = Math.max(0, fee - driverCost);
+  let youCash       = roundTo10((remainder / 2) + driverCost);
+  youCash           = Math.max(0, Math.min(fee, youCash));
+  const heCash      = fee - youCash;
+
+  try {
+    await update(ref(db, `gigs/${editingFbKey}`), {
+      date:        document.getElementById("editDate").value.trim(),
+      town:        document.getElementById("editTown").value.trim(),
+      fee, milesOneWay, totalMiles, fuelCost,
+      you: youCash, he: heCash
+    });
+    document.getElementById("editPanel").classList.add("hidden");
+    editingFbKey = null;
+    showToast("Gig updated ✓");
+  } catch(e) { showToast("Update failed — check connection."); console.error(e); }
+};
+
+/* ===== HISTORY ===== */
 function makeGigRow(fbKey, g) {
-  const row = document.createElement("div"); row.className = "history-row";
+  const row  = document.createElement("div"); row.className = "history-row";
   const left = document.createElement("div"); left.className = "history-left";
 
-  const l1 = document.createElement("div"); l1.className = "history-line1";
-  l1.textContent = `${g.date ? formatDateNice(g.date)+" — " : ""}${(g.town||"(no town)").trim()}`;
+  const dateEl = document.createElement("div"); dateEl.className = "history-date";
+  dateEl.textContent = g.date ? formatDateNice(g.date) : "No date";
+
+  const venueEl = document.createElement("div"); venueEl.className = "history-line1";
+  venueEl.textContent = (g.town||"(no town)").trim();
 
   const l2 = document.createElement("div"); l2.className = "history-line2";
   const tm = g.totalMiles != null ? ` • ${g.totalMiles.toFixed(1)}mi` : "";
   const fc = g.fuelCost   != null ? ` • fuel £${g.fuelCost.toFixed(2)}` : "";
   l2.textContent = `£${Math.round(g.fee||0)} • You £${Math.round(g.you||0)} • SWJ £${Math.round(g.he||0)}${tm}${fc}`;
 
-  left.appendChild(l1); left.appendChild(l2);
+  left.appendChild(dateEl);
+  left.appendChild(venueEl);
+  left.appendChild(l2);
 
-  if (g.notes) {
-    const ln = document.createElement("div"); ln.className = "history-notes"; ln.textContent = g.notes; left.appendChild(ln);
-  }
   if (!g.paid) {
     const up = document.createElement("div"); up.className = "history-unpaid"; up.textContent = "⚠ UNPAID"; left.appendChild(up);
   }
 
   const actions = document.createElement("div"); actions.className = "history-actions";
+
   const waBtn = document.createElement("button"); waBtn.className = "small-btn small-btn-whatsapp"; waBtn.textContent = "WA"; waBtn.onclick = () => openWhatsapp(g);
   const icsBtn = document.createElement("button"); icsBtn.className = "small-btn"; icsBtn.textContent = "📅"; icsBtn.onclick = () => downloadIcs(g);
+
   const paidBtn = document.createElement("button");
   paidBtn.className = g.paid ? "small-btn small-btn-paid" : "small-btn small-btn-unpaid";
   paidBtn.textContent = g.paid ? "✓ Paid" : "Unpaid";
   paidBtn.onclick = () => update(ref(db, `gigs/${fbKey}`), { paid: !g.paid });
+
+  const editBtn = document.createElement("button"); editBtn.className = "small-btn"; editBtn.textContent = "Edit";
+  editBtn.onclick = () => openEditPanel(fbKey, g);
+
+  const csvBtn = document.createElement("button"); csvBtn.className = "small-btn"; csvBtn.textContent = "CSV";
+  csvBtn.onclick = () => exportGigCsv(g);
+
   const delBtn = document.createElement("button"); delBtn.className = "small-btn small-btn-danger"; delBtn.textContent = "Del";
   delBtn.onclick = () => { if (confirm(`Delete gig: ${(g.town||"").trim()}?`)) remove(ref(db, `gigs/${fbKey}`)); };
-  [waBtn, icsBtn, paidBtn, delBtn].forEach(b => actions.appendChild(b));
+
+  [waBtn, icsBtn, paidBtn, editBtn, csvBtn, delBtn].forEach(b => actions.appendChild(b));
   row.appendChild(left); row.appendChild(actions);
   return row;
 }
@@ -354,7 +366,7 @@ function renderHistory() {
   if (!histEl) return;
 
   const today = todayYMD();
-  const all = Object.entries(gigsData).sort((a,b) => (a[1].date||"").localeCompare(b[1].date||""));
+  const all   = Object.entries(gigsData).sort((a,b) => (a[1].date||"").localeCompare(b[1].date||""));
 
   if (!all.length) { histEl.innerHTML = '<div class="history-empty">No gigs saved yet.</div>'; return; }
 
@@ -379,7 +391,7 @@ function renderHistory() {
     });
 
     Object.keys(byYear).sort((a,b) => b-a).forEach(year => {
-      const gigs = byYear[year].sort((a,b) => (b[1].date||"").localeCompare(a[1].date||""));
+      const gigs   = byYear[year].sort((a,b) => (b[1].date||"").localeCompare(a[1].date||""));
       const folder = document.createElement("div"); folder.className = "year-folder";
       const header = document.createElement("div"); header.className = "year-folder-header";
       header.innerHTML = `<span class="year-folder-label">📁 ${year}</span><span class="year-folder-count">${gigs.length} gig${gigs.length !== 1 ? "s" : ""}</span><span class="year-folder-chevron">▸</span>`;
@@ -390,8 +402,7 @@ function renderHistory() {
         body.classList.toggle("hidden");
         header.querySelector(".year-folder-chevron").textContent = isOpen ? "▸" : "▾";
       };
-      folder.appendChild(header);
-      folder.appendChild(body);
+      folder.appendChild(header); folder.appendChild(body);
       histEl.appendChild(folder);
     });
   }
@@ -404,6 +415,9 @@ function calcAndRender() {
   const milesOneWay = safeNum(document.getElementById("miles").value, 0);
   const fee         = safeNum(document.getElementById("fee").value, 0);
   if (milesOneWay <= 0 || fee <= 0) { showWarning("Enter a fee and miles first."); return; }
+
+  const town = document.getElementById("town").value.trim();
+  autoSaveTown(town, milesOneWay);
 
   const s          = loadSettings();
   const fuelCost   = calcFuelCost(milesOneWay * 2, safeNum(s.mpg), safeNum(s.fuelPrice));
@@ -426,11 +440,11 @@ function calcAndRender() {
   if (fuelCost !== null) { document.getElementById("fuelCost").textContent = money(fuelCost); fuelRow.classList.remove("hidden"); }
   else fuelRow.classList.add("hidden");
 
-  document.getElementById("youGet").textContent   = "£" + Math.round(youCash);
-  document.getElementById("heGets").textContent   = "£" + Math.round(heCash);
-  document.getElementById("youNet").textContent   = netYou !== null ? `(£${Math.round(netYou)} after fuel)` : "";
-  document.getElementById("worthIt").textContent  = worthItLabel(hourly);
-  document.getElementById("hourlyRate").textContent = "£" + hourly.toFixed(2) + "/hr";
+  document.getElementById("youGet").textContent    = "£" + Math.round(youCash);
+  document.getElementById("heGets").textContent    = "£" + Math.round(heCash);
+  document.getElementById("youNet").textContent    = netYou !== null ? `(£${Math.round(netYou)} after fuel)` : "";
+  document.getElementById("worthIt").textContent   = worthItLabel(hourly);
+  document.getElementById("hourlyRate").textContent= "£" + hourly.toFixed(2) + "/hr";
 
   if (fee < minFee) showWarning(`⚠️ Below ${band} minimum (£${minFee})`);
   else if (fuelCost === null) showWarning("ℹ️ Set MPG and fuel price in Settings for fuel cost.");
@@ -440,10 +454,8 @@ function calcAndRender() {
 
   lastGig = {
     id: makeId(), createdAt: Date.now(),
-    date:  document.getElementById("date").value.trim(),
-    town:  document.getElementById("town").value.trim(),
-    notes: document.getElementById("notes").value.trim(),
-    fee, milesOneWay, totalMiles, fuelCost, band, minFee,
+    date: document.getElementById("date").value.trim(),
+    town, fee, milesOneWay, totalMiles, fuelCost, band, minFee,
     you: youCash, he: heCash, hourly, paid: false
   };
 
@@ -461,22 +473,13 @@ function clearResultsUI() {
 /* ===== HANDLERS ===== */
 document.getElementById("calcBtn").onclick = () => { hideWarning(); clearResultsUI(); calcAndRender(); };
 
-document.getElementById("saveTownBtn").onclick = () => {
-  const town = document.getElementById("town").value.trim();
-  const miles = safeNum(document.getElementById("miles").value, 0);
-  const notes = document.getElementById("notes").value.trim();
-  if (!town || miles <= 0) { showToast("Enter a town and miles first."); return; }
-  const towns = loadTowns(); towns[town] = { miles, notes }; saveTowns(towns); renderTownList();
-  showToast(`"${town}" saved`);
-};
-
 document.getElementById("saveGigBtn").onclick = async () => {
   if (!lastGig) return;
   if (!lastGig.date) lastGig.date = todayYMD();
   try {
     await push(ref(db, "gigs"), lastGig);
     showToast("Gig saved & synced ✓");
-    ["date","town","fee","miles","notes"].forEach(id => document.getElementById(id).value = "");
+    ["date","town","fee","miles"].forEach(id => document.getElementById(id).value = "");
     document.getElementById("fee").classList.remove("input-warn");
     document.getElementById("feeHint").classList.add("hidden");
     lastGig = null;
@@ -489,33 +492,16 @@ document.getElementById("whatsappBtn").onclick = () => { if (lastGig) openWhatsa
 document.getElementById("icsBtn").onclick      = () => { if (lastGig) downloadIcs(lastGig); };
 document.getElementById("shareBtn").onclick    = () => { if (lastGig) shareText(gigSummaryText(lastGig)); };
 
-document.getElementById("exportCsvBtn").onclick = () => {
-  const gigs = Object.values(gigsData).sort((a,b) => (a.date||"").localeCompare(b.date||""));
-  if (!gigs.length) { showToast("No history to export."); return; }
-  const cols = ["date","town","fee","milesOneWay","totalMiles","fuelCost","you","he","paid","startTime","endTime","notes"];
-  const lines = [cols.join(","), ...gigs.map(g => cols.map(k => `"${(g[k]??"")}"`).join(","))];
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type:"text/csv" }));
-  a.download = "gig-history.csv";
-  document.body.appendChild(a); a.click(); a.remove();
-};
-
 document.getElementById("shareGigsBtn").onclick = async () => {
   const today = todayYMD();
   const upcoming = Object.values(gigsData)
-    .filter(g => (g.date || "") >= today)
+    .filter(g => (g.date||"") >= today)
     .sort((a,b) => (a.date||"").localeCompare(b.date||""));
   if (!upcoming.length) { showToast("No upcoming gigs to share."); return; }
   const lines = ["🎸 Two Sick Steves Upcoming Gigs\n",
     ...upcoming.map(g => `${formatDateNice(g.date)} — ${(g.town||"").trim()}`)
   ];
   await shareText(lines.join("\n"));
-};
-
-document.getElementById("clearHistoryBtn").onclick = async () => {
-  if (!confirm("Delete ALL gigs from the shared database? This affects both apps.")) return;
-  await set(ref(db, "gigs"), null);
-  showToast("History cleared.");
 };
 
 /* ===== SETTINGS ===== */
@@ -532,8 +518,8 @@ document.getElementById("settingsBtn").onclick = () => {
 document.getElementById("closeSettingsBtn").onclick = () => document.getElementById("settingsPanel").classList.add("hidden");
 document.getElementById("saveSettingsBtn").onclick  = () => {
   saveSettings({
-    mpg:        safeNum(document.getElementById("settingMpg").value)        || null,
-    fuelPrice:  safeNum(document.getElementById("settingFuelPrice").value)  || null,
+    mpg:        safeNum(document.getElementById("settingMpg").value)       || null,
+    fuelPrice:  safeNum(document.getElementById("settingFuelPrice").value) || null,
     whatsapp:   document.getElementById("settingWhatsapp").value.trim(),
     avgSpeed:   safeNum(document.getElementById("settingAvgSpeed").value, 40),
     setupHours: safeNum(document.getElementById("settingSetupHours").value, 1),
@@ -541,6 +527,20 @@ document.getElementById("saveSettingsBtn").onclick  = () => {
   });
   document.getElementById("settingsPanel").classList.add("hidden");
   showToast("Settings saved ✓");
+};
+
+/* ===== INSTALL ===== */
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault(); deferredPrompt = e;
+  const btn = document.getElementById("installBtn");
+  if (btn) btn.style.display = "inline-block";
+});
+document.getElementById("installBtn").onclick = async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  try { const c = await deferredPrompt.userChoice; if (c?.outcome === "accepted") document.getElementById("installBtn").style.display = "none"; } catch {}
+  deferredPrompt = null;
 };
 
 /* ===== INIT ===== */

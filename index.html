@@ -17,18 +17,17 @@
       <span class="brand-icon">♪</span>
       <div>
         <h1>GigSplit</h1>
-        <p class="sub">Your view • live sync</p>
+        <p class="sub">Colwyn Bay • split calculator</p>
       </div>
     </div>
     <div class="header-actions">
       <span id="syncIndicator" class="sync-dot sync-off" title="Sync status"></span>
       <button id="settingsBtn" class="icon-btn" title="Settings">⚙</button>
+      <button id="installBtn" class="btn btn-ghost" style="display:none;">Install</button>
     </div>
   </div>
   <div class="toolbar">
-    <button id="exportCsvBtn" class="btn btn-ghost">↓ CSV</button>
     <button id="shareGigsBtn" class="btn btn-ghost">↑ Share gig list</button>
-    <button id="clearHistoryBtn" class="btn btn-danger">✕ Clear history</button>
   </div>
 </header>
 
@@ -72,11 +71,35 @@
   </div>
 </div>
 
+<!-- EDIT GIG PANEL -->
+<div id="editPanel" class="overlay hidden">
+  <div class="overlay-box">
+    <div class="overlay-header">
+      <h2>Edit gig</h2>
+      <button id="closeEditBtn" class="icon-btn">✕</button>
+    </div>
+    <label>Date
+      <input id="editDate" type="date">
+    </label>
+    <label>Venue / Town
+      <input id="editTown" type="text">
+    </label>
+    <label>Agreed fee (£)
+      <input id="editFee" type="number">
+    </label>
+    <label>One-way miles
+      <input id="editMiles" type="number" step="0.1">
+    </label>
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <button id="saveEditBtn" class="btn btn-primary full-width">Save changes</button>
+    </div>
+  </div>
+</div>
+
 <main class="wrap main-grid">
 
   <!-- LEFT: FORM + AVAILABILITY -->
   <div class="left-col">
-
     <section class="card">
       <h2 class="card-heading">New gig</h2>
       <label>Date
@@ -93,13 +116,9 @@
       <label>Colwyn Bay → Venue (one-way miles)
         <input id="miles" type="number" step="0.1" placeholder="15">
       </label>
-      <label>Venue notes <span class="optional">(saved with town)</span>
-        <input id="notes" type="text" placeholder="e.g. back entrance, ask for Dave">
-      </label>
 
       <div class="btn-row">
         <button id="calcBtn" class="btn btn-primary">Calculate</button>
-        <button id="saveTownBtn" class="btn btn-ghost">Save town</button>
       </div>
 
       <div id="warning" class="warning hidden"></div>
@@ -139,32 +158,17 @@
       <h2 class="card-heading">Availability</h2>
       <p class="hint">Block out dates you can't do. SWJ sees this live.</p>
       <div id="availCalendar" class="avail-calendar"></div>
-      <div id="steveUnavail" class="unavail-list"></div>
     </section>
-
   </div>
 
-  <!-- RIGHT: STATS + HISTORY -->
+  <!-- RIGHT: HISTORY -->
   <section class="card">
-    <div class="stats-tabs">
-      <button class="tab-btn active" data-tab="month">This month</button>
-      <button class="tab-btn" data-tab="year">This year</button>
-      <button class="tab-btn" data-tab="all">All time</button>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-item"><span class="stat-label">Gigs</span><span class="stat-value" id="statGigs">0</span></div>
-      <div class="stat-item"><span class="stat-label">Miles</span><span class="stat-value" id="statMiles">0</span></div>
-      <div class="stat-item"><span class="stat-label">You earned</span><span class="stat-value" id="statYou">£0</span></div>
-      <div class="stat-item"><span class="stat-label">Fuel spent</span><span class="stat-value" id="statFuel">—</span></div>
-    </div>
-
-    <h2 class="card-heading" style="margin-top:20px;">Gig history</h2>
+    <h2 class="card-heading">Gig history</h2>
     <div id="history"></div>
   </section>
 
 </main>
 
-<!-- Firebase -->
 <script type="module" src="app.js"></script>
 </body>
 </html>
