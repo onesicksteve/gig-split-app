@@ -9,7 +9,7 @@ const firebaseConfig = {
   projectId: "twosicksteves-7489a",
   storageBucket: "twosicksteves-7489a.firebasestorage.app",
   messagingSenderId: "657952916089",
-  appId: "1:657952916089:web:968ac06abcc63b2654caa8"
+  appId: "1:657952916789:web:968ac06abcc63b2654caa8"
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -25,13 +25,10 @@ function setSyncStatus(status) {
   if (status === "err") dot.classList.add("sync-err");
 }
 
-/* ===== SETTINGS ===== */
+/* ===== LOCAL SETTINGS ===== */
 const SETTINGS_KEY = "gigSplitSettings_v1";
-const TOWNS_KEY    = "townMiles_v2";
 function loadSettings() { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch { return {}; } }
 function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
-function loadTowns() { try { return JSON.parse(localStorage.getItem(TOWNS_KEY)) || {}; } catch { return {}; } }
-function saveTowns(t) { localStorage.setItem(TOWNS_KEY, JSON.stringify(t)); }
 
 /* ===== HELPERS ===== */
 function safeNum(v, fb = 0) { const n = Number(v); return Number.isFinite(n) ? n : fb; }
@@ -93,29 +90,75 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove("show"), 2500);
 }
 
-/* ===== TOWN LIST ===== */
+/* ===== FIREBASE DATA ===== */
+let gigsData     = {};
+let myUnavail    = {};
+let steveUnavail = {};
+let venuesData   = {};
+
+/* ===== SEED KNOWN VENUES ===== */
+const KNOWN_VENUES = [
+  { name: "Blue Bell, Conwy",         miles: 6,  lastFee: 250 },
+  { name: "MotoCamp, Dolgellau",      miles: 53, lastFee: 350 },
+  { name: "Barmouth Food Festival",   miles: 58, lastFee: 350 },
+  { name: "Cayley Arms, Rhos On Sea", miles: 2,  lastFee: 220 },
+  { name: "Gladstonbury",             miles: 0,  lastFee: 1100 },
+  { name: "Castle View, Deganwy",     miles: 6,  lastFee: 250 },
+  { name: "The Raven Cafe Bar",       miles: 17, lastFee: 250 },
+  { name: "The Anglers",              miles: 2,  lastFee: 200 },
+  { name: "The Gladstone",            miles: 10, lastFee: 250 },
+];
+
+onValue(ref(db, "venues"), async snap => {
+  const data = snap.val();
+  if (!data) {
+    for (const v of KNOWN_VENUES) await push(ref(db, "venues"), v);
+  } else {
+    venuesData = data;
+    renderTownList();
+    renderVenuesList();
+  }
+}, { onlyOnce: false });
+
+onValue(ref(db, "gigs"), snap => {
+  gigsData = snap.val() || {};
+  setSyncStatus("on");
+  renderHistory();
+  renderCalendar();
+}, err => { setSyncStatus("err"); console.error(err); });
+
+onValue(ref(db, "unavail/steve1"), snap => { myUnavail = snap.val() || {}; renderCalendar(); });
+onValue(ref(db, "unavail/steve2"), snap => { steveUnavail = snap.val() || {}; renderCalendar(); });
+
+/* ===== VENUE HELPERS ===== */
+function findVenueKey(name) {
+  return Object.entries(venuesData).find(([, v]) => v.name === name)?.[0] || null;
+}
+async function saveVenueToFirebase(name, miles, lastFee) {
+  if (!name || miles < 0) return;
+  const key = findVenueKey(name);
+  if (key) {
+    await update(ref(db, `venues/${key}`), { miles, lastFee: lastFee || venuesData[key]?.lastFee || 0 });
+  } else {
+    await push(ref(db, "venues"), { name, miles, lastFee: lastFee || 0 });
+  }
+}
+
+/* ===== TOWN DATALIST ===== */
 function renderTownList() {
   const dl = document.getElementById("townList");
   if (!dl) return;
   dl.innerHTML = "";
-  Object.keys(loadTowns()).sort().forEach(name => {
-    const o = document.createElement("option"); o.value = name; dl.appendChild(o);
+  Object.values(venuesData).sort((a,b) => a.name.localeCompare(b.name)).forEach(v => {
+    const o = document.createElement("option"); o.value = v.name; dl.appendChild(o);
   });
-}
-function autoSaveTown(town, miles, fee) {
-  if (!town || miles <= 0) return;
-  const towns = loadTowns();
-  const existing = towns[town] || {};
-  towns[town] = { miles, lastFee: fee || existing.lastFee || 0 };
-  saveTowns(towns);
-  renderTownList();
 }
 
 document.getElementById("town").addEventListener("change", () => {
-  const rec = loadTowns()[document.getElementById("town").value.trim()];
-  if (!rec) return;
-  if (typeof rec === "number") { document.getElementById("miles").value = rec; }
-  else { if (rec.miles) document.getElementById("miles").value = rec.miles; }
+  const name  = document.getElementById("town").value.trim();
+  const venue = Object.values(venuesData).find(v => v.name === name);
+  if (!venue) return;
+  document.getElementById("miles").value = venue.miles || "";
   updateFeeHint();
 });
 
@@ -140,28 +183,6 @@ function updateFeeHint() {
 document.getElementById("fee").addEventListener("input", updateFeeHint);
 document.getElementById("miles").addEventListener("input", updateFeeHint);
 
-/* ===== FIREBASE DATA ===== */
-let gigsData     = {};
-let myUnavail    = {};
-let steveUnavail = {};
-
-onValue(ref(db, "gigs"), snap => {
-  gigsData = snap.val() || {};
-  setSyncStatus("on");
-  renderHistory();
-  renderCalendar();
-}, err => { setSyncStatus("err"); console.error(err); });
-
-onValue(ref(db, "unavail/steve1"), snap => {
-  myUnavail = snap.val() || {};
-  renderCalendar();
-});
-
-onValue(ref(db, "unavail/steve2"), snap => {
-  steveUnavail = snap.val() || {};
-  renderCalendar();
-});
-
 /* ===== AVAILABILITY CHECK ===== */
 function checkAvailability(ymd) {
   if (!ymd) return { ok: false, msg: "Pick a date first." };
@@ -177,29 +198,24 @@ function checkAvailability(ymd) {
 let selectedVenue = null;
 
 function renderVenuesList() {
-  const towns  = loadTowns();
   const listEl = document.getElementById("venuesList");
-  const keys   = Object.keys(towns).sort();
-
-  if (!keys.length) {
-    listEl.innerHTML = '<div class="history-empty">No saved venues yet.<br>Use the calculator and they\'ll appear here.</div>';
+  if (!listEl) return;
+  const venues = Object.entries(venuesData).sort((a,b) => a[1].name.localeCompare(b[1].name));
+  if (!venues.length) {
+    listEl.innerHTML = '<div class="history-empty">No venues yet.</div>';
     return;
   }
-
   listEl.innerHTML = "";
-  keys.forEach(name => {
-    const rec    = towns[name];
-    const miles  = typeof rec === "number" ? rec : rec.miles || 0;
-    const lastFee= typeof rec === "object" ? (rec.lastFee || 0) : 0;
+  venues.forEach(([, v]) => {
+    const miles  = v.miles || 0;
     const [band] = bandFor(miles);
-
-    const card = document.createElement("div");
+    const card   = document.createElement("div");
     card.className = "venue-card";
     card.innerHTML = `
-      <div class="venue-card-name">${name}</div>
-      <div class="venue-card-meta">${miles} mi one-way • ${band}${lastFee ? " • last fee £"+lastFee : ""}</div>
+      <div class="venue-card-name">${v.name}</div>
+      <div class="venue-card-meta">${miles} mi one-way • ${band}${v.lastFee ? " • last fee £"+v.lastFee : ""}</div>
     `;
-    card.onclick = () => openVenueDatePicker(name, miles, lastFee);
+    card.onclick = () => openVenueDatePicker(v.name, miles, v.lastFee || 0);
     listEl.appendChild(card);
   });
 }
@@ -210,20 +226,20 @@ function openVenueDatePicker(name, miles, lastFee) {
   document.getElementById("venueDateMeta").textContent = `${miles} mi one-way • ${miles*2} mi return`;
   document.getElementById("venueDate").value = "";
   document.getElementById("venueFee").value  = lastFee || "";
-  document.getElementById("availCheck").classList.add("hidden");
-  document.getElementById("availCheck").className = "avail-check hidden";
+  const checkEl = document.getElementById("availCheck");
+  checkEl.className   = "avail-check hidden";
+  checkEl.textContent = "";
   document.getElementById("confirmVenueBtn").disabled = true;
   document.getElementById("venuesList").classList.add("hidden");
   document.getElementById("venueDatePicker").classList.remove("hidden");
 }
 
 document.getElementById("venueDate").addEventListener("change", () => {
-  const ymd    = document.getElementById("venueDate").value;
-  const check  = checkAvailability(ymd);
-  const el     = document.getElementById("availCheck");
+  const ymd   = document.getElementById("venueDate").value;
+  const check = checkAvailability(ymd);
+  const el    = document.getElementById("availCheck");
   el.textContent = check.msg;
-  el.className = check.ok ? "avail-check avail-ok" : "avail-check avail-no";
-  el.classList.remove("hidden");
+  el.className   = check.ok ? "avail-check avail-ok" : "avail-check avail-no";
   document.getElementById("confirmVenueBtn").disabled = !check.ok;
 });
 
@@ -237,25 +253,22 @@ document.getElementById("confirmVenueBtn").onclick = async () => {
   if (!selectedVenue) return;
   const ymd  = document.getElementById("venueDate").value;
   const fee  = safeNum(document.getElementById("venueFee").value, selectedVenue.lastFee || 0);
-  if (!ymd)  { showToast("Pick a date first."); return; }
-
+  if (!ymd) { showToast("Pick a date first."); return; }
   const check = checkAvailability(ymd);
   if (!check.ok) { showToast(check.msg); return; }
 
   const { totalMiles, fuelCost, you, he, hourly } = calcSplit(fee, selectedVenue.miles);
   const [band, minFee] = bandFor(selectedVenue.miles);
-
   const gig = {
     id: makeId(), createdAt: Date.now(),
     date: ymd, town: selectedVenue.name,
     fee, milesOneWay: selectedVenue.miles, totalMiles, fuelCost,
     band, minFee, you, he, hourly, paid: false
   };
-
   try {
     await push(ref(db, "gigs"), gig);
-    autoSaveTown(selectedVenue.name, selectedVenue.miles, fee);
-    showToast(`Gig booked: ${selectedVenue.name} on ${formatDateNice(ymd)} ✓`);
+    await saveVenueToFirebase(selectedVenue.name, selectedVenue.miles, fee);
+    showToast(`Booked: ${selectedVenue.name} on ${formatDateNice(ymd)} ✓`);
     document.getElementById("venuesPanel").classList.add("hidden");
     document.getElementById("venueDatePicker").classList.add("hidden");
     document.getElementById("venuesList").classList.remove("hidden");
@@ -287,7 +300,6 @@ function renderCalendar() {
   const firstDay    = new Date(calYear, calMonth, 1).getDay();
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
   const startOffset = (firstDay === 0 ? 6 : firstDay - 1);
-
   let html = `
     <div class="avail-month-header">
       <button class="avail-nav" id="calPrev">‹</button>
@@ -320,7 +332,6 @@ function renderCalendar() {
       <div class="legend-item"><div class="legend-dot legend-steve"></div> SWJ unavailable</div>
       <div class="legend-item"><div class="legend-dot legend-gig"></div> Gig booked</div>
     </div>`;
-
   container.innerHTML = html;
   document.getElementById("calPrev").onclick = () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); };
   document.getElementById("calNext").onclick = () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); };
@@ -411,37 +422,26 @@ document.getElementById("saveEditBtn").onclick = async () => {
 function makeGigRow(fbKey, g) {
   const row  = document.createElement("div"); row.className = "history-row";
   const left = document.createElement("div"); left.className = "history-left";
-
-  const dateEl = document.createElement("div"); dateEl.className = "history-date";
-  dateEl.textContent = g.date ? formatDateNice(g.date) : "No date";
-
-  const venueEl = document.createElement("div"); venueEl.className = "history-line1";
-  venueEl.textContent = (g.town||"(no town)").trim();
-
+  const dateEl  = document.createElement("div"); dateEl.className = "history-date"; dateEl.textContent = g.date ? formatDateNice(g.date) : "No date";
+  const venueEl = document.createElement("div"); venueEl.className = "history-line1"; venueEl.textContent = (g.town||"(no town)").trim();
   const l2 = document.createElement("div"); l2.className = "history-line2";
   const tm = g.totalMiles != null ? ` • ${g.totalMiles.toFixed(1)}mi` : "";
   const fc = g.fuelCost   != null ? ` • fuel £${g.fuelCost.toFixed(2)}` : "";
   l2.textContent = `£${Math.round(g.fee||0)} • You £${Math.round(g.you||0)} • SWJ £${Math.round(g.he||0)}${tm}${fc}`;
-
   left.appendChild(dateEl); left.appendChild(venueEl); left.appendChild(l2);
-
-  if (!g.paid) {
-    const up = document.createElement("div"); up.className = "history-unpaid"; up.textContent = "⚠ UNPAID"; left.appendChild(up);
-  }
+  if (!g.paid) { const up = document.createElement("div"); up.className = "history-unpaid"; up.textContent = "⚠ UNPAID"; left.appendChild(up); }
 
   const actions = document.createElement("div"); actions.className = "history-actions";
-
   const waBtn   = document.createElement("button"); waBtn.className = "small-btn small-btn-whatsapp"; waBtn.textContent = "WA"; waBtn.onclick = () => openWhatsapp(g);
   const icsBtn  = document.createElement("button"); icsBtn.className = "small-btn"; icsBtn.textContent = "📅"; icsBtn.onclick = () => downloadIcs(g);
   const paidBtn = document.createElement("button");
-  paidBtn.className   = g.paid ? "small-btn small-btn-paid" : "small-btn small-btn-unpaid";
+  paidBtn.className = g.paid ? "small-btn small-btn-paid" : "small-btn small-btn-unpaid";
   paidBtn.textContent = g.paid ? "✓ Paid" : "Unpaid";
   paidBtn.onclick = () => update(ref(db, `gigs/${fbKey}`), { paid: !g.paid });
   const editBtn = document.createElement("button"); editBtn.className = "small-btn"; editBtn.textContent = "Edit"; editBtn.onclick = () => openEditPanel(fbKey, g);
   const csvBtn  = document.createElement("button"); csvBtn.className = "small-btn"; csvBtn.textContent = "CSV"; csvBtn.onclick = () => exportGigCsv(g);
   const delBtn  = document.createElement("button"); delBtn.className = "small-btn small-btn-danger"; delBtn.textContent = "Del";
-  delBtn.onclick = () => { if (confirm(`Delete gig: ${(g.town||"").trim()}?`)) remove(ref(db, `gigs/${fbKey}`)); };
-
+  delBtn.onclick = () => { if (confirm(`Delete: ${(g.town||"").trim()}?`)) remove(ref(db, `gigs/${fbKey}`)); };
   [waBtn, icsBtn, paidBtn, editBtn, csvBtn, delBtn].forEach(b => actions.appendChild(b));
   row.appendChild(left); row.appendChild(actions);
   return row;
@@ -453,10 +453,8 @@ function renderHistory() {
   const today = todayYMD();
   const all   = Object.entries(gigsData).sort((a,b) => (a[1].date||"").localeCompare(b[1].date||""));
   if (!all.length) { histEl.innerHTML = '<div class="history-empty">No gigs saved yet.</div>'; return; }
-
   const upcoming = all.filter(([,g]) => (g.date||"") >= today);
   const past     = all.filter(([,g]) => (g.date||"")  < today);
-
   histEl.innerHTML = "";
   if (upcoming.length) {
     upcoming.forEach(([fbKey, g]) => histEl.appendChild(makeGigRow(fbKey, g)));
@@ -464,7 +462,6 @@ function renderHistory() {
     const empty = document.createElement("div"); empty.className = "history-empty"; empty.textContent = "No upcoming gigs.";
     histEl.appendChild(empty);
   }
-
   if (past.length) {
     const byYear = {};
     past.forEach(([fbKey, g]) => {
@@ -497,10 +494,8 @@ function calcAndRender() {
   const milesOneWay = safeNum(document.getElementById("miles").value, 0);
   const fee         = safeNum(document.getElementById("fee").value, 0);
   if (milesOneWay <= 0 || fee <= 0) { showWarning("Enter a fee and miles first."); return; }
-
   const town = document.getElementById("town").value.trim();
-  autoSaveTown(town, milesOneWay, fee);
-
+  if (town) saveVenueToFirebase(town, milesOneWay, fee);
   const { totalMiles, fuelCost, you: youCash, he: heCash, hourly } = calcSplit(fee, milesOneWay);
   const netYou = fuelCost !== null ? youCash - fuelCost : null;
   const [band, minFee] = bandFor(milesOneWay);
@@ -509,7 +504,6 @@ function calcAndRender() {
   const fuelRow = document.getElementById("fuelCostRow");
   if (fuelCost !== null) { document.getElementById("fuelCost").textContent = money(fuelCost); fuelRow.classList.remove("hidden"); }
   else fuelRow.classList.add("hidden");
-
   document.getElementById("youGet").textContent     = "£" + Math.round(youCash);
   document.getElementById("heGets").textContent     = "£" + Math.round(heCash);
   document.getElementById("youNet").textContent     = netYou !== null ? `(£${Math.round(netYou)} after fuel)` : "";
@@ -521,7 +515,6 @@ function calcAndRender() {
   else hideWarning();
 
   document.getElementById("resultsBlock").classList.remove("hidden");
-
   lastGig = {
     id: makeId(), createdAt: Date.now(),
     date: document.getElementById("date").value.trim(),
@@ -611,6 +604,5 @@ document.getElementById("installBtn").onclick = async () => {
 };
 
 /* ===== INIT ===== */
-renderTownList();
 renderCalendar();
 setSyncStatus("off");
