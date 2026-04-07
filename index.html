@@ -22,6 +22,7 @@
     </div>
     <div class="header-actions">
       <span id="syncIndicator" class="sync-dot sync-off" title="Sync status"></span>
+      <button id="venuesBtn" class="icon-btn" title="Quick book">📍</button>
       <button id="settingsBtn" class="icon-btn" title="Settings">⚙</button>
       <button id="installBtn" class="btn btn-ghost" style="display:none;">Install</button>
     </div>
@@ -30,6 +31,32 @@
     <button id="shareGigsBtn" class="btn btn-ghost">↑ Share gig list</button>
   </div>
 </header>
+
+<!-- VENUES PANEL -->
+<div id="venuesPanel" class="overlay hidden">
+  <div class="overlay-box">
+    <div class="overlay-header">
+      <h2>📍 Quick book</h2>
+      <button id="closeVenuesBtn" class="icon-btn">✕</button>
+    </div>
+    <div id="venuesList"></div>
+    <div id="venueDatePicker" class="hidden">
+      <div class="venue-selected-name" id="venueDateName"></div>
+      <div class="venue-selected-meta" id="venueDateMeta"></div>
+      <label style="margin-top:16px;">Date
+        <input id="venueDate" type="date">
+      </label>
+      <label>Fee (£) <span class="optional">— edit if needed</span>
+        <input id="venueFee" type="number">
+      </label>
+      <div id="availCheck" class="avail-check hidden"></div>
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button id="cancelVenueBtn" class="btn btn-ghost" style="flex:1;">← Back</button>
+        <button id="confirmVenueBtn" class="btn btn-primary" style="flex:2;" disabled>Save gig</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- SETTINGS -->
 <div id="settingsPanel" class="overlay hidden">
@@ -97,8 +124,6 @@
 </div>
 
 <main class="wrap main-grid">
-
-  <!-- LEFT: FORM + AVAILABILITY -->
   <div class="left-col">
     <section class="card">
       <h2 class="card-heading">New gig</h2>
@@ -116,13 +141,10 @@
       <label>Colwyn Bay → Venue (one-way miles)
         <input id="miles" type="number" step="0.1" placeholder="15">
       </label>
-
       <div class="btn-row">
         <button id="calcBtn" class="btn btn-primary">Calculate</button>
       </div>
-
       <div id="warning" class="warning hidden"></div>
-
       <div id="resultsBlock" class="results-block hidden">
         <div class="split-box">
           <div class="split-col">
@@ -136,14 +158,12 @@
             <div class="split-amount" id="heGets">—</div>
           </div>
         </div>
-
         <div class="results-grid">
           <div class="result-row"><span>Total miles (return)</span><strong id="totalMiles">—</strong></div>
           <div class="result-row" id="fuelCostRow"><span>Fuel cost</span><strong id="fuelCost" class="text-amber">—</strong></div>
           <div class="result-row"><span>Worth it?</span><strong id="worthIt">—</strong></div>
           <div class="result-row"><span>Your hourly rate</span><strong id="hourlyRate">—</strong></div>
         </div>
-
         <div class="action-row">
           <button id="saveGigBtn" class="btn btn-primary" disabled>Save &amp; sync</button>
           <button id="whatsappBtn" class="btn btn-whatsapp" disabled>WhatsApp SWJ</button>
@@ -153,7 +173,6 @@
       </div>
     </section>
 
-    <!-- AVAILABILITY -->
     <section class="card">
       <h2 class="card-heading">Availability</h2>
       <p class="hint">Block out dates you can't do. SWJ sees this live.</p>
@@ -161,12 +180,10 @@
     </section>
   </div>
 
-  <!-- RIGHT: HISTORY -->
   <section class="card">
     <h2 class="card-heading">Gig history</h2>
     <div id="history"></div>
   </section>
-
 </main>
 
 <script type="module" src="app.js"></script>

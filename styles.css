@@ -58,6 +58,7 @@ button { cursor: pointer; font-family: var(--font); font-size: 14px; border: non
 
 /* ===== FORM ===== */
 label { display: block; margin-bottom: 12px; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+.optional { font-weight: 400; color: var(--text-dim); font-size: 12px; }
 input { display: block; width: 100%; padding: 9px 12px; margin-top: 5px; background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-family: var(--font); font-size: 15px; outline: none; transition: border-color 0.15s; }
 input:focus { border-color: var(--accent); }
 input::placeholder { color: var(--text-dim); }
@@ -118,6 +119,20 @@ input.input-warn { border-color: var(--amber); }
 .year-folder-chevron { font-size: 12px; color: var(--text-dim); margin-left: 4px; }
 .year-folder-body { padding: 0 14px; }
 .year-folder-body .history-row:last-child { border-bottom: none; }
+
+/* ===== VENUE CARDS ===== */
+.venue-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.venue-card:hover { border-color: var(--accent); background: var(--bg2); }
+.venue-card-name { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.venue-card-meta { font-size: 12px; color: var(--text-muted); }
+
+.venue-selected-name { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--text); }
+.venue-selected-meta { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+/* ===== AVAILABILITY CHECK ===== */
+.avail-check { padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 500; margin-top: 12px; }
+.avail-ok { background: #14532d; border: 1px solid var(--green); color: var(--green); }
+.avail-no { background: var(--red-dim); border: 1px solid var(--red); color: #fca5a5; }
 
 /* ===== AVAILABILITY CALENDAR ===== */
 .avail-calendar { user-select: none; }
